@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "StudyAI — Google Sync",
+  "version": "1.0",
+  "description": "Detects your Google searches and saves AI study notes with one click.",
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://www.google.com/*",
+    "http://localhost:3000/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.google.com/search*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "StudyAI Notes"
+  }
+}

@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>StudyAI</title>
+<style>
+
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Root variables ── */
+:root {
+  --bg:      #0a0a0f;
+  --surface: #13131a;
+  --s2:      #1c1c27;
+  --border:  #2a2a3a;
+  --accent:  #e8c97a;
+  --a2:      #7a9ee8;
+  --text:    #e8e6f0;
+  --muted:   #8887a0;
+  --dim:     #4a4960;
+  --success: #6fcf97;
+  --danger:  #e87a7a;
+}
+
+/* ── Base ── */
+body {
+  width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ── Header ── */
+.header {
+  background: linear-gradient(135deg, #1a1a25, #141420);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.logo em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.sync-btn {
+  background: rgba(122, 158, 232, 0.12);
+  border: 1px solid rgba(122, 158, 232, 0.25);
+  color: var(--a2);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.sync-btn:hover { opacity: 0.8; }
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1;
+  padding: 9px 0;
+  font-size: 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Stats bar ── */
+.stats {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.stat {
+  flex: 1;
+  background: var(--s2);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.stat-num {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.stat-label {
+  display: block;
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+/* ── Panels ── */
+.panel {
+  display: none;
+}
+
+.panel.active {
+  display: block;
+}
+
+/* ── Notes list (panel 1) ── */
+.notes-list {
+  padding: 10px 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-bottom: 7px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.note-item:hover {
+  border-color: var(--accent);
+}
+
+/* Dot color shows source:
+   gold   = manual save
+   blue   = auto (from Google search)
+   green  = synced with server          */
+.note-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  background: var(--accent); /* default: manual */
+}
+
+.note-dot.auto   { background: var(--a2); }
+.note-dot.synced { background: var(--success); }
+
+.note-meta { flex: 1; min-width: 0; }
+
+.note-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+
+.note-info {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.note-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.note-badge.auto   { background: rgba(122,158,232,.15); color: var(--a2); }
+.note-badge.manual { background: rgba(232,201,122,.1);  color: var(--accent); }
+.note-badge.synced { background: rgba(111,207,151,.1);  color: var(--success); }
+
+.empty-msg {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+/* ── Import panel (panel 2) ── */
+.import-panel {
+  padding: 12px 14px;
+}
+
+.import-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+  letter-spacing: 0.03em;
+}
+
+.import-desc {
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+
+/* Numbered steps */
+.steps { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.step-num {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* File upload zone */
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: var(--s2);
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  text-align: center;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+
+.upload-zone:hover { border-color: var(--accent); }
+
+.upload-icon  { font-size: 22px; }
+.upload-label { font-size: 12px; font-weight: 500; }
+.upload-sub   { font-size: 10px; color: var(--dim); }
+
+/* File status message */
+.file-status {
+  font-size: 11px;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: none;
+}
+
+.file-status.ok  { background: rgba(111,207,151,.1); color: var(--success); display: block; }
+.file-status.err { background: rgba(232,122,122,.1); color: var(--danger);  display: block; }
+
+/* Import progress bar */
+.progress-wrap { display: none; margin-top: 8px; }
+.progress-wrap.visible { display: block; }
+
+.progress-bg {
+  background: var(--s2);
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.progress-text {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Divider */
+.divider {
+  text-align: center;
+  font-size: 10px;
+  color: var(--dim);
+  margin: 10px 0;
+  position: relative;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 42%;
+  height: 1px;
+  background: var(--border);
+}
+
+.divider::before { left: 0; }
+.divider::after  { right: 0; }
+
+/* Manual textarea */
+.manual-input {
+  width: 100%;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+  min-height: 64px;
+  transition: border-color 0.2s;
+}
+
+.manual-input:focus    { border-color: var(--accent); }
+.manual-input::placeholder { color: var(--dim); }
+
+/* ── Settings panel (panel 3) ── */
+.settings-panel {
+  padding: 12px 14px;
+}
+
+.settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+  letter-spacing: 0.03em;
+}
+
+.sync-status {
+  font-size: 11px;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-top: 7px;
+  display: none;
+}
+
+.sync-status.ok  { background: rgba(111,207,151,.1); color: var(--success); display: block; }
+.sync-status.err { background: rgba(232,122,122,.1); color: var(--danger);  display: block; }
+
+/* ── Buttons ── */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-bottom: 6px;
+  border: none;
+}
+
+.btn:hover    { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-gold    { background: var(--accent); color: #0a0a0f; }
+.btn-outline { background: none; border: 1px solid var(--border); color: var(--muted); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger  { background: none; border: 1px solid var(--border); color: var(--muted); }
+.btn-danger:hover  { border-color: var(--danger); color: var(--danger); }
+
+/* ── Open app button (bottom, always visible) ── */
+.open-app {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 10px 12px 12px;
+  padding: 9px;
+  background: var(--accent);
+  color: #0a0a0f;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+
+.open-app:hover { opacity: 0.85; }
+
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div class="logo">Study<em>AI</em></div>
+  <button class="sync-btn" id="sync-btn">⇅ Sync</button>
+</div>
+
+<!-- ── Tabs ── -->
+<div class="tabs">
+  <button class="tab active" data-tab="notes">📚 Notes</button>
+  <button class="tab" data-tab="import">📥 Import</button>
+  <button class="tab" data-tab="settings">⚙ Settings</button>
+</div>
+
+<!-- ── Stats bar ── -->
+<div class="stats">
+  <div class="stat">
+    <span class="stat-num" id="stat-total">0</span>
+    <span class="stat-label">Total</span>
+  </div>
+  <div class="stat">
+    <span class="stat-num" id="stat-auto">0</span>
+    <span class="stat-label">Auto-saved</span>
+  </div>
+  <div class="stat">
+    <span class="stat-num" id="stat-synced">0</span>
+    <span class="stat-label">Synced</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB 1 — Notes list
+══════════════════════════════════════ -->
+<div class="panel active" id="panel-notes">
+  <div class="notes-list" id="notes-list">
+    <!-- Filled by popup.js -->
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB 2 — Import Google history
+══════════════════════════════════════ -->
+<div class="panel" id="panel-import">
+  <div class="import-panel">
+
+    <div class="import-label">📥 Google Takeout Import</div>
+
+    <div class="steps">
+      <div class="step">
+        <span class="step-num">1</span>
+        Go to myaccount.google.com → Data &amp; Privacy
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        Download your data → select "Search"
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        Extract ZIP → find Searches.json
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        Upload it below
+      </div>
+    </div>
+
+    <!-- File upload zone -->
+    <label class="upload-zone" id="upload-zone">
+      <input type="file" id="file-input" accept=".json" style="display:none"/>
+      <div class="upload-icon">📂</div>
+      <div class="upload-label">Click to upload Searches.json</div>
+      <div class="upload-sub">or drag and drop</div>
+    </label>
+
+    <div class="file-status" id="file-status"></div>
+
+    <button class="btn btn-gold" id="import-file-btn" disabled>
+      Generate Notes from History
+    </button>
+
+    <!-- Progress bar (shown during import) -->
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bg">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="progress-text" id="progress-text">Starting…</div>
+    </div>
+
+    <div class="divider">OR</div>
+
+    <!-- Manual textarea -->
+    <div class="import-label" style="margin-top:4px">✏️ Paste queries manually</div>
+    <textarea
+      class="manual-input"
+      id="manual-input"
+      placeholder="One topic per line:&#10;photosynthesis&#10;big o notation&#10;french revolution"
+    ></textarea>
+    <button class="btn btn-outline" id="import-manual-btn" style="margin-top:6px">
+      Generate Notes for These Topics
+    </button>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB 3 — Settings
+══════════════════════════════════════ -->
+<div class="panel" id="panel-settings">
+  <div class="settings-panel">
+
+    <div class="settings-label">Server Sync</div>
+    <button class="btn btn-outline" id="pull-sync-btn">
+      ⇩ Pull all notes from server
+    </button>
+    <div class="sync-status" id="sync-status"></div>
+
+    <div class="settings-label" style="margin-top:14px">Data</div>
+    <button class="btn btn-danger" id="clear-btn">
+      🗑 Clear all local notes
+    </button>
+
+  </div>
+</div>
+
+<!-- ── Open app button (always visible at bottom) ── -->
+<button class="open-app" id="open-app-btn">
+  Open StudyAI Library →
+</button>
+
+<script src="popup.js"></script>
+</body>
+</html>
