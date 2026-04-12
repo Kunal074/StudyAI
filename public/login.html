@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>StudyAI — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orb orb-1"></div>
+<div class="bg-orb orb-2"></div>
+
+<div class="auth-page">
+
+  <!-- Logo -->
+  <div class="auth-logo">
+    <div class="logo-badge">AI</div>
+    <h1 class="hero-title">Study<em>AI</em></h1>
+    <p class="hero-sub">Welcome back! Login to your notes.</p>
+  </div>
+
+  <!-- Login Form -->
+  <div class="auth-card">
+
+    <h2 class="auth-title">Login</h2>
+
+    <!-- Error message -->
+    <div class="alert alert-error hidden" id="error-msg"></div>
+
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input
+        type="email"
+        id="email"
+        class="form-input"
+        placeholder="you@example.com"
+        autocomplete="email"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input
+        type="password"
+        id="password"
+        class="form-input"
+        placeholder="••••••••"
+        autocomplete="current-password"
+      />
+    </div>
+
+    <button class="btn-primary" id="login-btn">
+      Login
+    </button>
+
+    <p class="auth-switch">
+      Account nahi hai?
+      <a href="signup.html" class="auth-link">Sign up karo</a>
+    </p>
+
+  </div>
+
+</div>
+
+<script src="js/login.js"></script>
+</body>
+</html>

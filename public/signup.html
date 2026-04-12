@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>StudyAI — Sign Up</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orb orb-1"></div>
+<div class="bg-orb orb-2"></div>
+
+<div class="auth-page">
+
+  <!-- Logo -->
+  <div class="auth-logo">
+    <div class="logo-badge">AI</div>
+    <h1 class="hero-title">Study<em>AI</em></h1>
+    <p class="hero-sub">Create your account. Start learning smarter.</p>
+  </div>
+
+  <!-- Signup Form -->
+  <div class="auth-card">
+
+    <h2 class="auth-title">Create Account</h2>
+
+    <!-- Error message -->
+    <div class="alert alert-error hidden" id="error-msg"></div>
+
+    <!-- Success message -->
+    <div class="alert alert-success hidden" id="success-msg"></div>
+
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input
+        type="text"
+        id="name"
+        class="form-input"
+        placeholder="Kunal Sharma"
+        autocomplete="name"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input
+        type="email"
+        id="email"
+        class="form-input"
+        placeholder="you@example.com"
+        autocomplete="email"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input
+        type="password"
+        id="password"
+        class="form-input"
+        placeholder="Min. 6 characters"
+        autocomplete="new-password"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Confirm Password</label>
+      <input
+        type="password"
+        id="confirm-password"
+        class="form-input"
+        placeholder="••••••••"
+        autocomplete="new-password"
+      />
+    </div>
+
+    <button class="btn-primary" id="signup-btn">
+      Create Account
+    </button>
+
+    <p class="auth-switch">
+      Pehle se account hai?
+      <a href="login.html" class="auth-link">Login karo</a>
+    </p>
+
+  </div>
+
+</div>
+
+<script src="js/signup.js"></script>
+</body>
+</html>
