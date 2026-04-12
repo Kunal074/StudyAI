@@ -1,31 +1,23 @@
 /**
  * middleware/auth.js
  * ─────────────────────────────────────────────
- * JWT Authentication Middleware.
+ * JWT Authentication Middleware
  *
- * Kaam kya karta hai:
- *  - Har protected route pe pehle yeh run hota hai
- *  - Request header se JWT token nikalta hai
- *  - Token verify karta hai
- *  - Agar valid → user info req.user mein daal deta hai
- *  - Agar invalid → 401 error return karta hai
- *
- * Usage:
- *  router.get('/protected', protect, (req, res) => {
- *    res.json({ user: req.user });
- *  });
+ * Kaam karta hai:
+ *  1. Request header se token nikalo
+ *  2. Token verify karo
+ *  3. User PostgreSQL se fetch karo
+ *  4. req.user mein daal do
+ *  5. Next route pe jaao
  */
 
-const jwt  = require('jsonwebtoken');
-const User = require('../models/user');
+const jwt = require('jsonwebtoken');
+const db  = require('../db');
 
-// ── Protect middleware ────────────────────────────────────────────────────────
 const protect = async (req, res, next) => {
-
   try {
-    // ── Step 1: Token nikalo header se ───────────────────────────────────────
-    // Frontend token bhejta hai is format mein:
-    // Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+
+    // ── Step 1: Header se token nikalo ───────────────────────────────────────
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -40,29 +32,30 @@ const protect = async (req, res, next) => {
 
     // ── Step 2: Token verify karo ─────────────────────────────────────────────
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // decoded mein hoga: { id: 'user_id', iat: ..., exp: ... }
+    // decoded = { id: 1, iat: ..., exp: ... }
 
-    // ── Step 3: User database se nikalo ──────────────────────────────────────
-    // Password field exclude karo — security
-    const user = await User.findById(decoded.id).select('-password');
+    // ── Step 3: User PostgreSQL se fetch karo ────────────────────────────────
+    const { rows } = await db.query(
+      'SELECT id, name, email, created_at FROM users WHERE id = $1',
+      [decoded.id]
+    );
 
-    if (!user) {
+    // User nahi mila
+    if (rows.length === 0) {
       return res.status(401).json({
         success: false,
         error:   'User not found. Please login again.'
       });
     }
 
-    // ── Step 4: User info request mein attach karo ────────────────────────────
-    // Ab kisi bhi route mein req.user se user info milegi
-    req.user = user;
+    // ── Step 4: User info request mein attach karo ───────────────────────────
+    req.user = rows[0];
 
-    // ── Step 5: Aage badhao ───────────────────────────────────────────────────
+    // ── Step 5: Aage jaao ─────────────────────────────────────────────────────
     next();
 
   } catch (err) {
 
-    // Token expired ya invalid
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,

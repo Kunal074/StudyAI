@@ -8,19 +8,20 @@
  *  GET  /api/auth/me      → Apni profile dekho (protected)
  */
 
-const express = require('express');
-const jwt     = require('jsonwebtoken');
-const User    = require('../models/user');
-const protect = require('../middleware/auth');
+const express  = require('express');
+const bcrypt   = require('bcryptjs');
+const jwt      = require('jsonwebtoken');
+const db       = require('../db');
+const protect  = require('../middleware/auth');
 
-const router  = express.Router();
+const router   = express.Router();
 
 // ── Helper: JWT token generate karo ──────────────────────────────────────────
 function generateToken(userId) {
   return jwt.sign(
-    { id: userId },          // payload — user ki id
-    process.env.JWT_SECRET,  // secret key
-    { expiresIn: '7d' }      // 7 din baad expire hoga
+    { id: userId },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
   );
 }
 
@@ -28,7 +29,7 @@ function generateToken(userId) {
 router.post('/signup', async (req, res) => {
   const { name, email, password } = req.body;
 
-  // ── Step 1: Validate input ────────────────────────────────────────────────
+  // ── Step 1: Validate ──────────────────────────────────────────────────────
   if (!name || !email || !password) {
     return res.status(400).json({
       success: false,
@@ -44,29 +45,40 @@ router.post('/signup', async (req, res) => {
   }
 
   try {
-    // ── Step 2: Check karo email already exist toh nahi karta ────────────────
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // ── Step 2: Email already exist karta hai? ────────────────────────────────
+    const existing = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email.toLowerCase()]
+    );
 
-    if (existingUser) {
+    if (existing.rows.length > 0) {
       return res.status(400).json({
         success: false,
         error:   'Email already registered. Please login.'
       });
     }
 
-    // ── Step 3: New user banao ────────────────────────────────────────────────
-    // Password automatically hash hoga User model ke pre-save hook se
-    const user = await User.create({ name, email, password });
+    // ── Step 3: Password hash karo ────────────────────────────────────────────
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ── Step 4: Token generate karo ───────────────────────────────────────────
-    const token = generateToken(user._id);
+    // ── Step 4: User banao ────────────────────────────────────────────────────
+    const { rows } = await db.query(
+      `INSERT INTO users (name, email, password)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, email, created_at`,
+      [name, email.toLowerCase(), hashedPassword]
+    );
 
-    // ── Step 5: Response bhejo ────────────────────────────────────────────────
+    const user = rows[0];
+
+    // ── Step 5: Token generate karo ───────────────────────────────────────────
+    const token = generateToken(user.id);
+
     return res.status(201).json({
       success: true,
       token,
       user: {
-        id:    user._id,
+        id:    user.id,
         name:  user.name,
         email: user.email
       }
@@ -85,7 +97,7 @@ router.post('/signup', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
-  // ── Step 1: Validate input ────────────────────────────────────────────────
+  // ── Step 1: Validate ──────────────────────────────────────────────────────
   if (!email || !password) {
     return res.status(400).json({
       success: false,
@@ -95,17 +107,22 @@ router.post('/login', async (req, res) => {
 
   try {
     // ── Step 2: Email se user dhundo ──────────────────────────────────────────
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const { rows } = await db.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email.toLowerCase()]
+    );
 
-    if (!user) {
+    if (rows.length === 0) {
       return res.status(401).json({
         success: false,
         error:   'Invalid email or password'
       });
     }
 
+    const user = rows[0];
+
     // ── Step 3: Password check karo ───────────────────────────────────────────
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -115,14 +132,13 @@ router.post('/login', async (req, res) => {
     }
 
     // ── Step 4: Token generate karo ───────────────────────────────────────────
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
-    // ── Step 5: Response bhejo ────────────────────────────────────────────────
     return res.json({
       success: true,
       token,
       user: {
-        id:    user._id,
+        id:    user.id,
         name:  user.name,
         email: user.email
       }
@@ -138,16 +154,14 @@ router.post('/login', async (req, res) => {
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
-// Protected route — apni profile dekho
 router.get('/me', protect, async (req, res) => {
-  // req.user already set hai middleware se
   return res.json({
     success: true,
     user: {
-      id:        req.user._id,
-      name:      req.user.name,
-      email:     req.user.email,
-      createdAt: req.user.createdAt
+      id:         req.user.id,
+      name:       req.user.name,
+      email:      req.user.email,
+      created_at: req.user.created_at
     }
   });
 });
