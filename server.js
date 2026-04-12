@@ -1,58 +1,76 @@
 /**
  * server.js
  * ─────────────────────────────────────────────
- * Main entry point for the StudyAI Node.js backend.
+ * Main entry point — StudyAI Backend
  *
- * Responsibilities:
- *  1. Create Express app
- *  2. Apply middleware (JSON parsing, static files, CORS)
- *  3. Mount API routes
- *  4. Start the server
+ * Kaam karta hai:
+ *  1. Environment variables load karo
+ *  2. MongoDB se connect karo
+ *  3. Express app banao
+ *  4. Middleware lagao
+ *  5. Routes mount karo
+ *  6. Server start karo
  */
 
-const express = require('express');
-const path    = require('path');
-const cors    = require('cors');
+require('dotenv').config(); // sabse pehle — .env load karo
 
-// ── Import routes ─────────────────────────────────────────────────────────────
+const express  = require('express');
+const mongoose = require('mongoose');
+const path     = require('path');
+const cors     = require('cors');
+
+// ── Routes import ─────────────────────────────────────────────────────────────
+const authRouter  = require('./routes/auth');
 const notesRouter = require('./routes/notes');
 
-// ── Create Express app ────────────────────────────────────────────────────────
+// ── Express app ───────────────────────────────────────────────────────────────
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 
-// 1. Parse incoming JSON request bodies
+// JSON body parse karo
 app.use(express.json());
 
-// 2. CORS — allow Chrome extension + any local frontend to call the API
-//    The extension runs from a chrome-extension:// origin, so we allow all
+// CORS — extension aur frontend dono allow karo
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type']
+  origin:         '*',
+  methods:        ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// 3. Serve the frontend (public folder)
-//    index.html, CSS, JS files are served from here
+// Static files — public folder serve karo
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Mount API routes ──────────────────────────────────────────────────────────
-// All note-related endpoints live under /api
-app.use('/api', notesRouter);
+// ── API Routes ────────────────────────────────────────────────────────────────
+app.use('/api/auth',  authRouter);   // /api/auth/signup, /api/auth/login
+app.use('/api',       notesRouter);  // /api/notes, /api/notes/save, etc.
 
-// ── Catch-all route ───────────────────────────────────────────────────────────
-// For any unknown route, serve index.html
-// This allows the frontend to handle its own navigation
-app.get('*', (req, res) => {
+// ── Catch-all — frontend serve karo ──────────────────────────────────────────
+app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ── Start server ──────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log('\n─────────────────────────────────');
-  console.log(`  🚀 StudyAI running!`);
-  console.log(`  http://localhost:${PORT}`);
-  console.log('─────────────────────────────────\n');
-});
+// ── MongoDB connect + Server start ────────────────────────────────────────────
+async function startServer() {
+  try {
+    // MongoDB se connect karo
+    await mongoose.connect(process.env.MONGODB_URI);
+
+    console.log('\n─────────────────────────────────');
+    console.log('  ✅ MongoDB connected!');
+
+    // Server start karo sirf MongoDB connect hone ke baad
+    app.listen(PORT, () => {
+      console.log(`  🚀 StudyAI running!`);
+      console.log(`  http://localhost:${PORT}`);
+      console.log('─────────────────────────────────\n');
+    });
+
+  } catch (err) {
+    console.error('❌ MongoDB connection failed:', err.message);
+    process.exit(1); // server band kar do agar DB connect na ho
+  }
+}
+
+startServer();
