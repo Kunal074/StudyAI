@@ -1,19 +1,19 @@
 /**
  * routes/notes.js
  * ─────────────────────────────────────────────
- * All notes endpoints — ab user-specific hain
+ * All notes endpoints — PostgreSQL ke saath
  *
- *  POST   /api/notes              → Generate English notes via Gemini
- *  POST   /api/notes/translate    → Translate notes to Hinglish
- *  POST   /api/notes/save         → Save note to MongoDB
- *  GET    /api/notes/all          → Get logged-in user ke saare notes
- *  GET    /api/notes/search       → Topic se search karo
- *  DELETE /api/notes/:id          → Delete a note
+ *  POST   /api/notes            → Generate English notes via Gemini
+ *  POST   /api/notes/translate  → Translate notes to Hinglish
+ *  POST   /api/notes/save       → Save note to PostgreSQL
+ *  GET    /api/notes/all        → Logged-in user ke saare notes
+ *  GET    /api/notes/search     → Topic se search karo
+ *  DELETE /api/notes/:id        → Delete a note
  */
 
 const express = require('express');
 const router  = express.Router();
-const Note    = require('../models/Note');
+const db      = require('../db');
 const protect = require('../middleware/auth');
 
 // ── Gemini API config ─────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ async function callGemini(prompt) {
 }
 
 // ── POST /api/notes ───────────────────────────────────────────────────────────
-// Generate English notes — no auth needed (search is public)
+// Generate English notes — login required nahi
 router.post('/notes', async (req, res) => {
   const { query } = req.body;
 
@@ -92,7 +92,7 @@ router.post('/notes/translate', async (req, res) => {
 });
 
 // ── POST /api/notes/save ──────────────────────────────────────────────────────
-// Save note to MongoDB — protected (login required)
+// Save note to PostgreSQL — login required
 router.post('/notes/save', protect, async (req, res) => {
   const { query, notes, hinglish = null, source = 'manual' } = req.body;
 
@@ -104,38 +104,45 @@ router.post('/notes/save', protect, async (req, res) => {
   }
 
   try {
-    // Check karo agar same query ka note already hai is user ka
-    const existing = await Note.findOne({
-      user:  req.user._id,
-      query: { $regex: new RegExp(`^${query}$`, 'i') } // case insensitive
-    });
+    // Check karo same query ka note already hai is user ka
+    const existing = await db.query(
+      `SELECT id FROM notes
+       WHERE user_id = $1
+       AND LOWER(query) = LOWER($2)`,
+      [req.user.id, query]
+    );
 
-    if (existing) {
+    if (existing.rows.length > 0) {
       // Update karo existing note
-      existing.notes    = notes;
-      existing.hinglish = hinglish;
-      existing.source   = source;
-      await existing.save();
+      const { rows } = await db.query(
+        `UPDATE notes
+         SET notes      = $1,
+             hinglish   = $2,
+             source     = $3,
+             updated_at = NOW()
+         WHERE id = $4
+         RETURNING *`,
+        [JSON.stringify(notes), hinglish ? JSON.stringify(hinglish) : null, source, existing.rows[0].id]
+      );
 
       return res.json({
         success: true,
-        note:    existing,
+        note:    rows[0],
         message: 'Note updated'
       });
     }
 
     // Naya note banao
-    const note = await Note.create({
-      user:  req.user._id,
-      query,
-      notes,
-      hinglish,
-      source
-    });
+    const { rows } = await db.query(
+      `INSERT INTO notes (user_id, query, notes, hinglish, source)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [req.user.id, query, JSON.stringify(notes), hinglish ? JSON.stringify(hinglish) : null, source]
+    );
 
     return res.status(201).json({
       success: true,
-      note,
+      note:    rows[0],
       message: 'Note saved'
     });
 
@@ -149,17 +156,20 @@ router.post('/notes/save', protect, async (req, res) => {
 });
 
 // ── GET /api/notes/all ────────────────────────────────────────────────────────
-// Get all notes of logged-in user — newest first
+// Logged-in user ke saare notes — newest first
 router.get('/notes/all', protect, async (req, res) => {
   try {
-    const notes = await Note.find({ user: req.user._id })
-      .sort({ createdAt: -1 }) // newest first
-      .select('-__v');          // __v field exclude karo
+    const { rows } = await db.query(
+      `SELECT * FROM notes
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [req.user.id]
+    );
 
     return res.json({
       success: true,
-      count:   notes.length,
-      notes
+      count:   rows.length,
+      notes:   rows
     });
 
   } catch (err) {
@@ -172,10 +182,9 @@ router.get('/notes/all', protect, async (req, res) => {
 });
 
 // ── GET /api/notes/search ─────────────────────────────────────────────────────
-// Search notes by topic — only logged-in user ke notes mein
+// Apne notes mein search karo topic se
 router.get('/notes/search', protect, async (req, res) => {
   const { q } = req.query;
-  // /api/notes/search?q=photosynthesis
 
   if (!q || !q.trim()) {
     return res.status(400).json({
@@ -185,21 +194,21 @@ router.get('/notes/search', protect, async (req, res) => {
   }
 
   try {
-    const notes = await Note.find({
-      user:  req.user._id,
-      // Search in query field and title
-      $or: [
-        { query:        { $regex: q, $options: 'i' } },
-        { 'notes.title': { $regex: q, $options: 'i' } }
-      ]
-    })
-    .sort({ createdAt: -1 })
-    .select('-__v');
+    const { rows } = await db.query(
+      `SELECT * FROM notes
+       WHERE user_id = $1
+       AND (
+         LOWER(query) LIKE LOWER($2)
+         OR LOWER(notes->>'title') LIKE LOWER($2)
+       )
+       ORDER BY created_at DESC`,
+      [req.user.id, `%${q}%`]
+    );
 
     return res.json({
       success: true,
-      count:   notes.length,
-      notes
+      count:   rows.length,
+      notes:   rows
     });
 
   } catch (err) {
@@ -212,22 +221,23 @@ router.get('/notes/search', protect, async (req, res) => {
 });
 
 // ── DELETE /api/notes/:id ─────────────────────────────────────────────────────
-// Delete a note — sirf apna note delete kar sakta hai user
+// Sirf apna note delete kar sakta hai
 router.delete('/notes/:id', protect, async (req, res) => {
   try {
-    const note = await Note.findOne({
-      _id:  req.params.id,
-      user: req.user._id    // ensure ownership
-    });
+    const { rows } = await db.query(
+      `DELETE FROM notes
+       WHERE id = $1
+       AND user_id = $2
+       RETURNING id`,
+      [req.params.id, req.user.id]
+    );
 
-    if (!note) {
+    if (rows.length === 0) {
       return res.status(404).json({
         success: false,
         error:   'Note not found'
       });
     }
-
-    await note.deleteOne();
 
     return res.json({
       success: true,
@@ -267,7 +277,6 @@ function buildTranslatePrompt(notes) {
 Hinglish rules:
 - Mix Hindi and English naturally jaise Indians bolte hain
 - Technical words English mein rehne do
-- Sentences Hindi structure mein but English words freely use karo
 - Simple aur conversational rakho jaise ek dost explain kar raha ho
 - Pure Hindi ya pure English mat likho
 
