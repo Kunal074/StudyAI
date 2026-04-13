@@ -63,13 +63,21 @@ let isHinglish   = false;  // toggle state
 // 1. INIT — user info dikhao navbar mein
 // ══════════════════════════════════════════════════════
 function init() {
-  // User avatar aur name set karo
   if (USER.name) {
     userAvatar.textContent = USER.name.charAt(0).toUpperCase();
-    userName.textContent   = USER.name.split(' ')[0]; // first name only
+    userName.textContent   = USER.name.split(' ')[0];
   }
 
-  // Notes badge update karo
+  // Token ko chrome.storage mein save karo
+  // Taaki extension use kar sake
+  if (TOKEN) {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.local.set({ studyai_token: TOKEN })
+        .then(() => console.log('Token shared with extension'))
+        .catch(() => {});
+    }
+  }
+
   updateBadge();
 }
 

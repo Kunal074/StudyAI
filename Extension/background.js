@@ -54,47 +54,69 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ── Handler 1: Generate notes via API + save ──────────────────────────────────
 async function generateAndSave(query) {
   try {
+    // ── Step 1: Token lo localStorage se ─────────────────────────────────
+    // App se token lenge — same user ke liye save hoga
+    const tokenRes = await chrome.storage.local.get('studyai_token');
+    const token    = tokenRes.studyai_token;
 
-    // Step 1: Call the StudyAI Node.js backend
-    const response = await fetch(`${API_BASE}/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    if (!token) {
+      return { 
+        success: false, 
+        error: 'Please login to StudyAI app first!' 
+      };
+    }
+
+    // ── Step 2: Notes generate karo ───────────────────────────────────────
+    const genResponse = await fetch('http://localhost:3000/api/notes', {
+      method:  'POST',
+      headers: { 
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ query })
     });
 
-    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+    if (!genResponse.ok) throw new Error('Generation failed');
+    const genData = await genResponse.json();
+    if (!genData.success) throw new Error(genData.error);
 
-    const data = await response.json();
-    if (!data.success) throw new Error(data.error || 'API failed');
+    // ── Step 3: Note save karo server pe ─────────────────────────────────
+    const saveResponse = await fetch('http://localhost:3000/api/notes/save', {
+      method:  'POST',
+      headers: { 
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ 
+        query, 
+        notes:  genData.notes,
+        source: 'auto'
+      })
+    });
 
-    // Step 2: Build the note object
-    const note = {
-      id:      Date.now().toString(),
-      query:   query,
-      savedAt: new Date().toISOString(),
-      source:  'auto',   // saved from Google search (not manually)
-      synced:  true,     // came from server so it's already synced
-      notes:   data.notes
-    };
+    if (!saveResponse.ok) throw new Error('Save failed');
+    const saveData = await saveResponse.json();
+    if (!saveData.success) throw new Error(saveData.error);
 
-    // Step 3: Load existing notes, check for duplicate query
+    // ── Step 4: Chrome storage mein bhi save karo (popup ke liye) ────────
     const existing = await getNotes();
     const dupIndex = existing.findIndex(
       n => n.query.toLowerCase() === query.toLowerCase()
     );
 
-    // If same query already saved → update it, else prepend
-    if (dupIndex >= 0) {
-      existing[dupIndex] = { ...note, id: existing[dupIndex].id };
-    } else {
-      existing.unshift(note);
-    }
+    const note = {
+      id:      Date.now().toString(),
+      query,
+      savedAt: new Date().toISOString(),
+      source:  'auto',
+      synced:  true,
+      notes:   genData.notes
+    };
 
-    // Step 4: Save back to chrome.storage.local
+    if (dupIndex >= 0) existing[dupIndex] = note;
+    else existing.unshift(note);
+
     await chrome.storage.local.set({ [STORAGE_KEY]: existing });
-
-    // Step 5: Also save to the Node server (so app stays in sync)
-    syncNoteToServer(note).catch(() => {}); // fire and forget
 
     return { success: true, note };
 

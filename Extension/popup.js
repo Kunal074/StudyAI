@@ -21,7 +21,9 @@ const statTotal      = document.getElementById('stat-total');
 const statAuto       = document.getElementById('stat-auto');
 const statSynced     = document.getElementById('stat-synced');
 const syncBtn        = document.getElementById('sync-btn');
-const openAppBtn     = document.getElementById('open-app-btn');
+const openAppBtn     = document.getElementById('open-app-btn').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'http://localhost:3000' });
+});
 const clearBtn       = document.getElementById('clear-btn');
 const pullSyncBtn    = document.getElementById('pull-sync-btn');
 const syncStatus     = document.getElementById('sync-status');
@@ -34,6 +36,75 @@ const manualInput    = document.getElementById('manual-input');
 const progressWrap   = document.getElementById('progress-wrap');
 const progressBar    = document.getElementById('progress-bar');
 const progressText   = document.getElementById('progress-text');
+
+
+
+// ── Check karo token hai ya nahi ──────────────────────────────────────────────
+async function checkAuth() {
+  const result = await chrome.storage.local.get('studyai_token');
+  const token  = result.studyai_token;
+
+  const loginPanel = document.getElementById('panel-login');
+  const mainUI     = document.querySelectorAll('.tabs, .stats, .panel, .open-app');
+
+  if (!token) {
+    // Token nahi hai — login form dikhao
+    loginPanel.style.display = 'block';
+    mainUI.forEach(el => el.style.display = 'none');
+  } else {
+    // Token hai — normal UI dikhao
+    loginPanel.style.display = 'none';
+    mainUI.forEach(el => el.style.display = '');
+    loadNotes();
+  }
+}
+
+// ── Extension login ───────────────────────────────────────────────────────────
+document.getElementById('ext-login-btn').addEventListener('click', async () => {
+  const email    = document.getElementById('ext-email').value.trim();
+  const password = document.getElementById('ext-password').value.trim();
+  const errorDiv = document.getElementById('ext-login-error');
+  const btn      = document.getElementById('ext-login-btn');
+
+  if (!email || !password) {
+    errorDiv.textContent    = 'Email aur password dono bharo';
+    errorDiv.style.display  = 'block';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Logging in…';
+
+  try {
+    const res  = await fetch('http://localhost:3000/api/auth/login', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.error);
+
+    // Token save karo
+    await chrome.storage.local.set({ 
+      studyai_token: data.token,
+      studyai_user:  data.user
+    });
+
+    // Normal UI dikhao
+    checkAuth();
+
+  } catch (err) {
+    errorDiv.textContent   = err.message || 'Login failed';
+    errorDiv.style.display = 'block';
+    btn.disabled           = false;
+    btn.textContent        = 'Login';
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+checkAuth(); // loadNotes() ki jagah checkAuth() call karo
 
 // Stores queries parsed from the uploaded JSON file
 let parsedQueries = [];
@@ -293,5 +364,3 @@ function esc(s = '') {
     .replace(/>/g, '&gt;');
 }
 
-// ── Init — load notes when popup opens ───────────────────────────────────────
-loadNotes();
