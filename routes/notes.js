@@ -16,25 +16,30 @@ const router  = express.Router();
 const db      = require('../db');
 const protect = require('../middleware/auth');
 
-// ── Gemini API config ─────────────────────────────────────────────────────────
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+/// ── Groq API config ───────────────────────────────────────────────────────────
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// ── Helper: Gemini call karo ──────────────────────────────────────────────────
+// ── Helper: Groq call karo ────────────────────────────────────────────────────
 async function callGemini(prompt) {
-  const response = await fetch(GEMINI_URL, {
+  const response = await fetch(GROQ_URL, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+    },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
+      model:    'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1500
     })
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini error: ${response.status}`);
+    throw new Error(`Groq error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.candidates[0].content.parts[0].text;
+  return data.choices[0].message.content;
 }
 
 // ── POST /api/notes ───────────────────────────────────────────────────────────
