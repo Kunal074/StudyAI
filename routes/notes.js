@@ -1,4 +1,4 @@
-/**
+  /**
  * routes/notes.js
  * ─────────────────────────────────────────────
  * All notes endpoints — PostgreSQL ke saath
@@ -260,35 +260,86 @@ router.delete('/notes/:id', protect, async (req, res) => {
 
 // ── English notes prompt ──────────────────────────────────────────────────────
 function buildPrompt(query) {
-  return `You are an expert study-notes generator. Topic: "${query}"
+  return `You are an expert study-notes generator for students. Topic: "${query}"
 
-Respond ONLY with a valid JSON object. No markdown, no backticks, just raw JSON:
+Generate DETAILED and PRACTICAL study notes. Follow these rules strictly:
+
+1. DEFINITION: Write 3-4 sentences. Cover what it is, why it exists, and where it's used.
+
+2. KEY POINTS: Write exactly 6 key points. Each point must:
+   - Be specific and informative (not vague)
+   - Include actual values, numbers, or comparisons where possible
+   - Example for CSS Units: "1rem = 16px by default (root font size). Use rem for scalable layouts."
+   - Each point should be 1-2 sentences long
+
+3. EXAMPLE: Give a real, practical example that a student can relate to.
+   - Should explain HOW and WHY, not just what
+   - Minimum 2-3 sentences
+
+4. FORMULA/CODE: 
+   - For programming topics: Write actual working code with comments
+   - For math topics: Write the formula with explanation of each variable
+   - For science topics: Write the equation or process
+   - NEVER write just syntax — always write a complete working example
+   - Minimum 4-5 lines of code with comments explaining each line
+   - Example for CSS Units:
+     /* Absolute units - fixed size */
+     .box { font-size: 16px; }  /* always 16px */
+     
+     /* Relative units - scales with parent */
+     .box { font-size: 1.5em; }  /* 1.5x parent font size */
+     
+     /* Root relative - scales with html */
+     .box { font-size: 1rem; }   /* 1rem = 16px default */
+     
+     /* Viewport units */
+     .box { width: 50vw; }       /* 50% of viewport width */
+
+5. RELATED TOPICS: 3 closely related topics
+
+Respond ONLY with valid JSON, no markdown, no backticks:
 
 {
   "title": "Clear topic title",
-  "definition": "2-3 sentence definition in simple English",
-  "keyPoints": ["point 1", "point 2", "point 3", "point 4", "point 5"],
-  "example": "One concrete real-world example",
-  "formulaOrCode": "Formula or code snippet if relevant, else empty string",
-  "formulaLabel": "Label like 'Python Example' or empty string",
+  "definition": "3-4 sentence detailed definition explaining what, why, and where",
+  "keyPoints": [
+    "specific point with actual values/numbers",
+    "specific point with actual values/numbers",
+    "specific point with actual values/numbers",
+    "specific point with actual values/numbers",
+    "specific point with actual values/numbers",
+    "specific point with actual values/numbers"
+  ],
+  "example": "Practical 2-3 sentence example with HOW and WHY",
+  "formulaOrCode": "Complete working code/formula with comments — minimum 4 lines",
+  "formulaLabel": "Language or type label e.g. CSS Example, Python Code, Math Formula",
   "relatedTopics": ["topic1", "topic2", "topic3"]
 }`;
 }
 
 // ── Hinglish translate prompt ─────────────────────────────────────────────────
 function buildTranslatePrompt(notes) {
-  return `You are a Hinglish translator. Convert these English study notes to Hinglish.
+  return `You are a Hinglish translator for Indian students. 
+
+Convert these English study notes to Hinglish (Hindi + English mix).
 
 Hinglish rules:
-- Mix Hindi and English naturally jaise Indians bolte hain
-- Technical words English mein rehne do
-- Simple aur conversational rakho jaise ek dost explain kar raha ho
-- Pure Hindi ya pure English mat likho
+- Technical terms, code, formulas → NEVER translate (keep exactly as is)
+- Sentences → Hindi structure with English words mixed naturally
+- Sound like a Indian friend explaining, not a textbook
+- Numbers and values → keep as is
+- Code blocks → keep EXACTLY as is, do not translate any code
+- Example of good Hinglish: "CSS mein rem unit use karte hain kyunki yeh root element ke font-size pe based hota hai, default 16px hota hai"
 
 Input JSON:
 ${JSON.stringify(notes, null, 2)}
 
-Return SAME JSON structure with translated text.
+Rules for output:
+- "formulaOrCode" field → NEVER translate, keep exactly as original
+- "formulaLabel" → translate to hinglish
+- "relatedTopics" → keep in English
+- Everything else → translate to Hinglish
+
 Respond ONLY with raw JSON, no markdown, no backticks.`;
 }
 
