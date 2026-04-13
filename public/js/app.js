@@ -503,91 +503,133 @@ async function deleteNote(id) {
 // 10. MODAL — full note view
 // ══════════════════════════════════════════════════════
 function openModal(entry) {
-  const notes = entry.notes;
-  const {
-    title, definition, keyPoints = [],
-    example, formulaOrCode, formulaLabel, relatedTopics = []
-  } = notes;
+  const originalNotes    = entry.notes;
+  let modalHinglishNotes = entry.hinglish || null;
+  let modalIsHinglish    = false;
 
-  let html = `
-    <div class="card-header" style="border-radius:0">
-      <div class="card-badge">Study Notes</div>
-      <h2 class="card-title" style="margin-top:10px">${esc(title)}</h2>
-    </div>
-    <div>
-      <div class="card-section">
-        <div class="section-label">Definition</div>
-        <p class="definition-text">${esc(definition)}</p>
-      </div>
-      <div class="card-section">
-        <div class="section-label">Key Points</div>
-        <ul class="key-points">
-          ${keyPoints.map(p => `<li>${esc(p)}</li>`).join('')}
-        </ul>
-      </div>
-      <div class="card-section">
-        <div class="section-label">Example</div>
-        <div class="example-box">${esc(example)}</div>
-      </div>`;
+  function renderModalContent(notes) {
+    const {
+      title, definition, keyPoints = [],
+      example, formulaOrCode, formulaLabel, relatedTopics = []
+    } = notes;
 
-  if (formulaOrCode?.trim()) {
-    html += `
-      <div class="card-section">
-        <div class="section-label">Formula / Code</div>
-        ${formulaLabel ? `<div class="code-label">${esc(formulaLabel)}</div>` : ''}
-        <pre class="code-block">${esc(formulaOrCode)}</pre>
-      </div>`;
-  }
-
-  if (relatedTopics.length) {
-    html += `
-      <div class="card-section">
-        <div class="section-label">Related Topics</div>
-        <div class="related-chips">
-          ${relatedTopics.map(t =>
-            `<button class="related-chip modal-related" data-q="${esc(t)}">${esc(t)}</button>`
-          ).join('')}
+    let html = `
+      <div class="card-header" style="border-radius:0">
+        <div class="card-header-top">
+          <div class="card-badge">Study Notes</div>
+          <button class="hinglish-btn ${modalIsHinglish ? 'active' : ''}" id="modal-hinglish-btn">
+            ${modalIsHinglish ? '🇬🇧 English mein padho' : '🇮🇳 Hinglish mein padho'}
+          </button>
         </div>
-      </div>`;
+        <h2 class="card-title" style="margin-top:10px">${esc(title)}</h2>
+      </div>
+      <div>
+        <div class="card-section">
+          <div class="section-label">Definition</div>
+          <p class="definition-text">${esc(definition)}</p>
+        </div>
+        <div class="card-section">
+          <div class="section-label">Key Points</div>
+          <ul class="key-points">
+            ${keyPoints.map(p => `<li>${esc(p)}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="card-section">
+          <div class="section-label">Example</div>
+          <div class="example-box">${esc(example)}</div>
+        </div>`;
+
+    if (formulaOrCode?.trim()) {
+      html += `
+        <div class="card-section">
+          <div class="section-label">Formula / Code</div>
+          ${formulaLabel ? `<div class="code-label">${esc(formulaLabel)}</div>` : ''}
+          <pre class="code-block">${esc(formulaOrCode)}</pre>
+        </div>`;
+    }
+
+    if (relatedTopics.length) {
+      html += `
+        <div class="card-section">
+          <div class="section-label">Related Topics</div>
+          <div class="related-chips">
+            ${relatedTopics.map(t =>
+              `<button class="related-chip modal-related" data-q="${esc(t)}">${esc(t)}</button>`
+            ).join('')}
+          </div>
+        </div>`;
+    }
+
+    html += `</div>`;
+
+    // ── Inject HTML ────────────────────────────────────────────────────────
+    modalContent.innerHTML = html;
+
+    // ── Related chips ──────────────────────────────────────────────────────
+    modalContent.querySelectorAll('.modal-related').forEach(c => {
+      c.addEventListener('click', () => {
+        closeModal();
+        go(c.dataset.q);
+      });
+    });
+
+    // ── Hinglish button ────────────────────────────────────────────────────
+    document.getElementById('modal-hinglish-btn')
+      .addEventListener('click', handleHinglishToggle);
   }
 
-  // Hinglish version bhi saved hai toh button dikhao
-  if (entry.hinglish) {
-    html += `
-      <div class="card-section">
-        <button class="hinglish-btn" id="modal-hinglish-btn">
-          🇮🇳 Hinglish mein dekho
-        </button>
-      </div>`;
+  // ── Hinglish toggle handler ──────────────────────────────────────────────
+  async function handleHinglishToggle() {
+    const btn = document.getElementById('modal-hinglish-btn');
+
+    // English pe wapas jao
+    if (modalIsHinglish) {
+      modalIsHinglish = false;
+      renderModalContent(originalNotes);
+      return;
+    }
+
+    // Hinglish already translated hai
+    if (modalHinglishNotes) {
+      modalIsHinglish = true;
+      renderModalContent(modalHinglishNotes);
+      return;
+    }
+
+    // Pehli baar translate karo
+    btn.disabled    = true;
+    btn.textContent = '⏳ Translating…';
+
+    try {
+      const res = await fetch('/api/notes/translate', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ notes: originalNotes })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error);
+
+      // Save karo — dobara translate na karna pade
+      modalHinglishNotes = data.notes;
+      modalIsHinglish    = true;
+
+      renderModalContent(modalHinglishNotes);
+
+    } catch (err) {
+      btn.disabled    = false;
+      btn.textContent = '🇮🇳 Hinglish mein padho';
+      alert('Translation failed. Try again.');
+    }
   }
 
-  html += `</div>`;
-
-  modalContent.innerHTML = html;
+  // ── Show modal ─────────────────────────────────────────────────────────────
+  renderModalContent(originalNotes);
   noteModal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
-
-  // Related chips in modal
-  modalContent.querySelectorAll('.modal-related').forEach(c => {
-    c.addEventListener('click', () => {
-      closeModal();
-      go(c.dataset.q);
-    });
-  });
-
-  // Hinglish toggle in modal
-  const modalHinglishBtn = $('modal-hinglish-btn');
-  if (modalHinglishBtn) {
-    let showingHinglish = false;
-    modalHinglishBtn.addEventListener('click', () => {
-      showingHinglish = !showingHinglish;
-      if (showingHinglish) {
-        openModal({ ...entry, notes: entry.hinglish, hinglish: entry.notes });
-      } else {
-        openModal(entry);
-      }
-    });
-  }
 }
 
 function closeModal() {
