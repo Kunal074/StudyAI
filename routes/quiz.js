@@ -13,6 +13,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 const protect = require('../middleware/auth');
+const apiLimiter = require('../middleware/usage');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -36,7 +37,7 @@ async function callGroq(prompt) {
 }
 
 // ── POST /api/quiz/generate ───────────────────────────────────────────────────
-router.post('/quiz/generate', protect, async (req, res) => {
+router.post('/quiz/generate', protect, apiLimiter, async (req, res) => {
   const { note_id } = req.body;
 
   if (!note_id) {
@@ -205,7 +206,7 @@ router.get('/quiz/note/:note_id', protect, async (req, res) => {
 
 // ── POST /api/quiz/generate-all ──────────────────────────────────────────────
 // Generate a combined quiz from ALL of the user's saved notes (up to 8 most recent)
-router.post('/quiz/generate-all', protect, async (req, res) => {
+router.post('/quiz/generate-all', protect, apiLimiter, async (req, res) => {
   try {
     const { rows: notes } = await db.query(
       `SELECT id, query, notes FROM notes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 8`,

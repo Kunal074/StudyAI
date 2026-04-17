@@ -15,6 +15,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 const protect = require('../middleware/auth');
+const apiLimiter = require('../middleware/usage');
 
 /// ── Groq API config ───────────────────────────────────────────────────────────
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -43,8 +44,8 @@ async function callGemini(prompt) {
 }
 
 // ── POST /api/notes ───────────────────────────────────────────────────────────
-// Generate English notes — login required nahi
-router.post('/notes', async (req, res) => {
+// Generate English notes
+router.post('/notes', protect, apiLimiter, async (req, res) => {
   const { query } = req.body;
 
   if (!query || !query.trim()) {
@@ -71,7 +72,7 @@ router.post('/notes', async (req, res) => {
 
 // ── POST /api/notes/translate ─────────────────────────────────────────────────
 // Translate English notes to Hinglish
-router.post('/notes/translate', async (req, res) => {
+router.post('/notes/translate', protect, apiLimiter, async (req, res) => {
   const { notes } = req.body;
 
   if (!notes) {
