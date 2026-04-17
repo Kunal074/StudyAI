@@ -59,6 +59,7 @@ let lastQuery    = '';
 let currentNotes = null;   // English notes currently shown
 let hinglishNotes= null;   // Hinglish translated notes
 let isHinglish   = false;  // toggle state
+const libraryNotesMap = {}; // noteId → notes object (cached for edit modal)
 
 // ══════════════════════════════════════════════════════
 // 1. INIT — user info dikhao navbar mein
@@ -234,9 +235,9 @@ function renderNotesCard(notes, query) {
       </div>`;
   }
 
-  // Save button
+  // Save + Edit buttons
   html += `
-    <div class="card-section">
+    <div class="card-section card-actions-row">
       <button id="save-btn" class="save-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2.5"
@@ -247,6 +248,7 @@ function renderNotesCard(notes, query) {
         </svg>
         Save to Library
       </button>
+      <button id="results-edit-btn" class="edit-note-btn">✏ Edit Note</button>
     </div>
     </div>`;
 
@@ -267,7 +269,11 @@ function renderNotesCard(notes, query) {
 
   // Save button
   $('save-btn').addEventListener('click', () => saveNote(query));
+
+  // Edit button — opens edit modal for unsaved in-memory note
+  $('results-edit-btn').addEventListener('click', () => openEditModal(null, query, currentNotes));
 }
+
 
 // ══════════════════════════════════════════════════════
 // 6. HINGLISH TOGGLE
@@ -412,6 +418,7 @@ async function loadLibrary(searchQuery = '') {
         day: 'numeric', month: 'short', year: '2-digit'
       });
       const notes = entry.notes;
+      libraryNotesMap[entry.id] = notes; // cache for edit modal
 
       return `
         <div class="lib-card" data-id="${entry.id}" style="animation-delay:${i * 0.04}s">
@@ -435,6 +442,7 @@ async function loadLibrary(searchQuery = '') {
             <div class="lib-card-actions">
               <button class="lib-action-btn quiz-btn" data-id="${entry.id}" data-query="${esc(entry.query)}" title="Take Quiz">🧠 Quiz</button>
               <button class="lib-action-btn share-btn" data-id="${entry.id}" data-query="${esc(entry.query)}" title="Share Note">🔗 Share</button>
+              <button class="lib-action-btn edit-btn" data-id="${entry.id}" data-query="${esc(entry.query)}" title="Edit Note">✏ Edit</button>
             </div>
           </div>
         </div>`;
@@ -472,6 +480,18 @@ async function loadLibrary(searchQuery = '') {
         shareNote(btn.dataset.id, btn.dataset.query);
       });
     });
+
+    // Edit buttons (Phase 2.1)
+    libraryGrid.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openEditModal(btn.dataset.id, btn.dataset.query, libraryNotesMap[btn.dataset.id]);
+      });
+    });
+
+    // Quiz All button
+    $('quiz-all-btn')?.removeEventListener('click', handleQuizAll);
+    $('quiz-all-btn')?.addEventListener('click', handleQuizAll);
 
   } catch (err) {
     libraryGrid.innerHTML = `
@@ -795,10 +815,13 @@ startQuizBtn.addEventListener('click', async () => {
   quizGenLoading.classList.remove('hidden');
 
   try {
-    const res  = await fetch('/api/quiz/generate', {
+    const isAllMode = !currentNoteIdForQ;
+    const endpoint  = isAllMode ? '/api/quiz/generate-all' : '/api/quiz/generate';
+    const reqBody   = isAllMode ? {} : { note_id: currentNoteIdForQ };
+    const res  = await fetch(endpoint, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-      body:    JSON.stringify({ note_id: currentNoteIdForQ })
+      body:    JSON.stringify(reqBody)
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error);
@@ -1248,3 +1271,176 @@ collabBackBtn?.addEventListener('click', () => {
 
 // ── Load shared note if token in URL ─────────────────────────────
 if (SHARE_TOKEN) openCollabPage(SHARE_TOKEN);
+
+// ══════════════════════════════════════════════════════════════════
+// PHASE 2.1 — EDIT NOTE + QUIZ ALL
+// ══════════════════════════════════════════════════════════════════
+
+// ── Edit State ───────────────────────────────────────────────────────────
+// null  = editing unsaved results-page note (in-memory)
+// ≥ 1  = editing a saved library note (DB update via PUT)
+let editingNoteId = null;
+let editingQuery  = '';
+let editingNotes  = {};   // deep clone of the note being edited
+
+// ── Open Edit Modal ─────────────────────────────────────────────────────
+function openEditModal(noteId, query, notesObj) {
+  if (!notesObj) return alert('Note data not available. Please reload the library.');
+
+  editingNoteId = noteId;
+  editingQuery  = query;
+  editingNotes  = JSON.parse(JSON.stringify(notesObj)); // deep clone
+
+  document.getElementById('edit-modal-heading').textContent      = query;
+  document.getElementById('edit-title').value                    = editingNotes.title        || '';
+  document.getElementById('edit-definition').value              = editingNotes.definition   || '';
+  document.getElementById('edit-example').value                 = editingNotes.example      || '';
+  document.getElementById('edit-formula-label').value           = editingNotes.formulaLabel  || '';
+  document.getElementById('edit-formula-code').value            = editingNotes.formulaOrCode || '';
+
+  renderEditKeyPoints([...(editingNotes.keyPoints    || [])]);
+  renderEditTopics   ([...(editingNotes.relatedTopics || [])]);
+
+  document.getElementById('edit-note-modal').classList.remove('hidden');
+}
+
+// ── Render Key Points list ──────────────────────────────────────────────────
+function renderEditKeyPoints(points) {
+  editingNotes.keyPoints = points;
+  const list = document.getElementById('edit-keypoints-list');
+  list.innerHTML = points.map((p, i) => `
+    <div class="edit-kp-row" data-index="${i}">
+      <input class="edit-input edit-kp-input" value="${esc(p)}" data-index="${i}" placeholder="Key point ${i + 1}…"/>
+      <button class="edit-remove-btn" data-index="${i}">×</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.edit-kp-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      editingNotes.keyPoints[parseInt(inp.dataset.index)] = inp.value;
+    });
+  });
+
+  list.querySelectorAll('.edit-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingNotes.keyPoints.splice(parseInt(btn.dataset.index), 1);
+      renderEditKeyPoints([...editingNotes.keyPoints]);
+    });
+  });
+}
+
+// ── Render Related Topics chips ──────────────────────────────────────────────
+function renderEditTopics(topics) {
+  editingNotes.relatedTopics = topics;
+  const list = document.getElementById('edit-topics-list');
+  list.innerHTML = topics.map((t, i) => `
+    <span class="edit-topic-chip">
+      ${esc(t)}<button class="edit-topic-del" data-index="${i}">×</button>
+    </span>
+  `).join('');
+
+  list.querySelectorAll('.edit-topic-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingNotes.relatedTopics.splice(parseInt(btn.dataset.index), 1);
+      renderEditTopics([...editingNotes.relatedTopics]);
+    });
+  });
+}
+
+// + Add Point button
+document.getElementById('add-keypoint-btn')?.addEventListener('click', () => {
+  editingNotes.keyPoints = editingNotes.keyPoints || [];
+  editingNotes.keyPoints.push('');
+  renderEditKeyPoints([...editingNotes.keyPoints]);
+  const inputs = document.querySelectorAll('.edit-kp-input');
+  inputs[inputs.length - 1]?.focus();
+});
+
+// + Add Topic button
+document.getElementById('add-topic-btn')?.addEventListener('click', () => {
+  const inp = document.getElementById('edit-topic-input');
+  const val = inp.value.trim();
+  if (!val) return;
+  editingNotes.relatedTopics = editingNotes.relatedTopics || [];
+  editingNotes.relatedTopics.push(val);
+  renderEditTopics([...editingNotes.relatedTopics]);
+  inp.value = '';
+  inp.focus();
+});
+
+document.getElementById('edit-topic-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('add-topic-btn')?.click(); }
+});
+
+// Close / Cancel modal
+const editModalEl = document.getElementById('edit-note-modal');
+const closeEditModal = () => editModalEl?.classList.add('hidden');
+
+document.getElementById('edit-modal-close')?.addEventListener('click', closeEditModal);
+document.getElementById('edit-cancel-btn')?.addEventListener('click', closeEditModal);
+editModalEl?.addEventListener('click', e => { if (e.target === editModalEl) closeEditModal(); });
+
+// Save Changes
+document.getElementById('edit-save-btn')?.addEventListener('click', async () => {
+  // Collect current form values
+  const updatedNotes = {
+    ...editingNotes,
+    title:         document.getElementById('edit-title').value.trim(),
+    definition:    document.getElementById('edit-definition').value.trim(),
+    example:       document.getElementById('edit-example').value.trim(),
+    formulaLabel:  document.getElementById('edit-formula-label').value.trim(),
+    formulaOrCode: document.getElementById('edit-formula-code').value.trim(),
+  };
+
+  const btn = document.getElementById('edit-save-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    if (editingNoteId) {
+      // ── Saved note — update in DB via PUT ───────────────────────────────────
+      const res  = await fetch(`/api/notes/${editingNoteId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body:    JSON.stringify({ notes: updatedNotes })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error);
+
+      libraryNotesMap[editingNoteId] = updatedNotes; // update cache
+      closeEditModal();
+      loadLibrary(); // refresh cards
+
+    } else {
+      // ── Unsaved results-page note — update in memory ────────────────────────
+      currentNotes  = updatedNotes;
+      hinglishNotes = null; // reset hinglish since content changed
+      isHinglish    = false;
+      renderNotesCard(currentNotes, editingQuery);
+      closeEditModal();
+    }
+  } catch (err) {
+    alert('Save failed: ' + err.message);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes`;
+  }
+});
+
+// ── QUIZ ALL NOTES ──────────────────────────────────────────────────────────────
+function handleQuizAll() {
+  currentNoteIdForQ          = null; // null → triggers all-notes endpoint
+  quizTopicTitle.textContent = '🧠 All My Notes';
+  document.querySelector('.quiz-meta-row').innerHTML = `
+    <span class="quiz-meta-pill">📚 All Topics</span>
+    <span class="quiz-meta-pill">🎯 MCQ Format</span>
+    <span class="quiz-meta-pill">⏱ ~8 Minutes</span>
+  `;
+  quizIntroPanel.classList.remove('hidden');
+  quizActivePanel.classList.add('hidden');
+  quizResultsPanel.classList.add('hidden');
+  quizGenLoading.classList.add('hidden');
+  startQuizBtn.disabled    = false;
+  startQuizBtn.textContent = 'Start Quiz →';
+  showPage(quizPage);
+}

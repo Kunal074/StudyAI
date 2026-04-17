@@ -343,4 +343,29 @@ Rules for output:
 Respond ONLY with raw JSON, no markdown, no backticks.`;
 }
 
-module.exports = router;
+// ── PUT /api/notes/:id — update a saved note's content ───────────────────────
+router.put('/notes/:id', protect, async (req, res) => {
+  const { notes } = req.body;
+  if (!notes) {
+    return res.status(400).json({ success: false, error: 'notes content is required' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      `UPDATE notes SET notes = $1 WHERE id = $2 AND user_id = $3 RETURNING *`,
+      [JSON.stringify(notes), req.params.id, req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Note not found or not yours' });
+    }
+
+    return res.json({ success: true, note: rows[0] });
+
+  } catch (err) {
+    console.error('[PUT /api/notes/:id]', err.message);
+    return res.status(500).json({ success: false, error: 'Failed to update note.' });
+  }
+});
+
+module.exports = router;

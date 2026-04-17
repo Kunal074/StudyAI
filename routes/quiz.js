@@ -203,7 +203,81 @@ router.get('/quiz/note/:note_id', protect, async (req, res) => {
   }
 });
 
-// ── Quiz prompt builder ───────────────────────────────────────────────────────
+// ── POST /api/quiz/generate-all ──────────────────────────────────────────────
+// Generate a combined quiz from ALL of the user's saved notes (up to 8 most recent)
+router.post('/quiz/generate-all', protect, async (req, res) => {
+  try {
+    const { rows: notes } = await db.query(
+      `SELECT id, query, notes FROM notes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 8`,
+      [req.user.id]
+    );
+
+    if (notes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No saved notes found. Save some notes first!'
+      });
+    }
+
+    const questionCount = Math.min(15, notes.length * 2 + 3);
+    const prompt = buildAllNotesQuizPrompt(notes, questionCount);
+    const raw    = await callGroq(prompt);
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+
+    if (!parsed.questions?.length) throw new Error('AI returned 0 questions');
+
+    const label = `All Notes Quiz (${notes.length} topic${notes.length > 1 ? 's' : ''})`;
+
+    // note_id is NULL because this spans multiple notes
+    const { rows } = await db.query(
+      `INSERT INTO quizzes (user_id, note_id, note_query, questions)
+       VALUES ($1, NULL, $2, $3)
+       RETURNING *`,
+      [req.user.id, label, JSON.stringify(parsed)]
+    );
+
+    return res.status(201).json({ success: true, quiz: rows[0], cached: false });
+
+  } catch (err) {
+    console.error('[/api/quiz/generate-all]', err.message);
+    return res.status(500).json({ success: false, error: 'Quiz generation failed. Try again.' });
+  }
+});
+
+function buildAllNotesQuizPrompt(notes, questionCount) {
+  const topicBlocks = notes.map((n, i) =>
+    `--- Topic ${i + 1}: "${n.query}" ---\n${JSON.stringify(n.notes, null, 1)}`
+  ).join('\n\n');
+
+  return `You are an expert quiz creator. Create a MIXED quiz covering ALL the topics below.
+
+${topicBlocks}
+
+Requirements:
+- Generate EXACTLY ${questionCount} multiple choice questions
+- Spread questions EVENLY across all ${notes.length} topics (~${Math.ceil(questionCount / notes.length)} per topic)
+- Mention the topic name in each question so it's clear which topic it refers to
+- Each question has EXACTLY 4 options (plain text, no A/B/C/D prefix)
+- "correct" is the 0-based index of the correct option (0, 1, 2, or 3)
+- Mix difficulty: easy, medium, hard
+- Each explanation must reference the relevant topic notes
+
+Respond ONLY with valid JSON, no markdown, no backticks:
+
+{
+  "questions": [
+    {
+      "id": 1,
+      "question": "Question text here?",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "correct": 0,
+      "explanation": "Explanation referencing the notes..."
+    }
+  ]
+}`;
+}
+
+
 function buildQuizPrompt(query, notes) {
   return `You are an expert quiz creator for students. Create a quiz ONLY from the study notes provided below.
 
