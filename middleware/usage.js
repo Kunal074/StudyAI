@@ -4,10 +4,10 @@ const db = require('../db');
  * apiLimiter middleware
  * 
  * Protects AI endpoints from abuse. Limit set to 10 per day.
- * Skips logic entirely for VIP user (kunalsahu23777@gmail.com).
+ * Skips logic entirely for VIP user (kunalsahu232777@gmail.com).
  */
 const apiLimiter = async (req, res, next) => {
-  const VIP_EMAIL = 'kunalsahu23777@gmail.com';
+  const VIP_EMAIL = 'kunalsahu232777@gmail.com';
   const DAILY_LIMIT = 10;
 
   try {

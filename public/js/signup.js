@@ -20,28 +20,87 @@ const nameInput    = document.getElementById('name');
 const emailInput   = document.getElementById('email');
 const passInput    = document.getElementById('password');
 const confirmInput = document.getElementById('confirm-password');
+const otpInput     = document.getElementById('otp');
+const otpGroup     = document.getElementById('otp-group');
+const sendOtpBtn   = document.getElementById('send-otp-btn');
 const signupBtn    = document.getElementById('signup-btn');
 const errorMsg     = document.getElementById('error-msg');
 const successMsg   = document.getElementById('success-msg');
 
-// ── Signup button click ───────────────────────────────────────────────────────
+// ── Buttons click ─────────────────────────────────────────────────────────────
+sendOtpBtn.addEventListener('click', handleSendOtp);
 signupBtn.addEventListener('click', handleSignup);
 
 // Enter key se bhi submit ho
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter') handleSignup();
+  if (e.key === 'Enter') {
+    if (signupBtn.style.display !== 'none') handleSignup();
+    else handleSendOtp();
+  }
 });
+
+// ── Send OTP function ─────────────────────────────────────────────────────────
+async function handleSendOtp() {
+  const name     = nameInput.value.trim();
+  const email    = emailInput.value.trim();
+  const password = passInput.value.trim();
+  const confirm  = confirmInput.value.trim();
+
+  // Validate base fields first
+  if (!name || !email || !password || !confirm) {
+    showError('Saare fields required hain (Name, Email, Passwords).');
+    return;
+  }
+  if (password.length < 6) {
+    showError('Password kam se kam 6 characters ka hona chahiye.');
+    return;
+  }
+  if (password !== confirm) {
+    showError('Passwords match nahi kar rahe!');
+    return;
+  }
+
+  setLoading(sendOtpBtn, true, 'Sending OTP…');
+  hideMessages();
+
+  try {
+    const response = await fetch('/api/auth/send-otp', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.success) throw new Error(data.error || 'Failed to send OTP');
+
+    showSuccess('OTP successfully sent! Please check your email.');
+    
+    // Switch UI to verification mode
+    sendOtpBtn.style.display = 'none';
+    otpGroup.style.display   = 'block';
+    signupBtn.style.display  = 'block';
+    
+    // Make email read-only so they don't change it after OTP is sent
+    emailInput.readOnly = true;
+
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    setLoading(sendOtpBtn, false, 'Send OTP');
+  }
+}
+
 
 // ── Main signup function ──────────────────────────────────────────────────────
 async function handleSignup() {
   const name     = nameInput.value.trim();
   const email    = emailInput.value.trim();
   const password = passInput.value.trim();
-  const confirm  = confirmInput.value.trim();
+  const otp      = otpInput.value.trim();
 
   // ── Validate ──────────────────────────────────────────────────────────────
-  if (!name || !email || !password || !confirm) {
-    showError('Saare fields required hain.');
+  if (!otp) {
+    showError('Please enter the verification code.');
     return;
   }
 
@@ -56,7 +115,7 @@ async function handleSignup() {
   }
 
   // ── Loading state ─────────────────────────────────────────────────────────
-  setLoading(true);
+  setLoading(signupBtn, true, 'Verifying & Creating…');
   hideMessages();
 
   try {
@@ -64,7 +123,7 @@ async function handleSignup() {
     const response = await fetch('/api/auth/signup', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password })
+      body: JSON.stringify({ name, email, password, otp })
     });
 
     const data = await response.json();
@@ -86,14 +145,15 @@ async function handleSignup() {
 
   } catch (err) {
     showError(err.message);
-    setLoading(false);
+  } finally {
+    setLoading(signupBtn, false, 'Verify & Create Account');
   }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function setLoading(loading) {
-  signupBtn.disabled    = loading;
-  signupBtn.textContent = loading ? 'Creating account…' : 'Create Account';
+function setLoading(btnElement, isLoading, text) {
+  btnElement.disabled    = isLoading;
+  btnElement.textContent = text;
 }
 
 function showError(msg) {

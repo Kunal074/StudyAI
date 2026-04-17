@@ -79,8 +79,24 @@
       />
     </div>
 
-    <button class="btn-primary" id="signup-btn">
-      Create Account
+    <div class="form-group" id="otp-group" style="display: none;">
+      <label class="form-label">Verification Code</label>
+      <input
+        type="text"
+        id="otp"
+        class="form-input"
+        placeholder="Enter 6-digit code"
+        autocomplete="one-time-code"
+      />
+      <p style="font-size: 12px; color: #888; margin-top: 5px;">Check your email (and spam folder) for the code.</p>
+    </div>
+
+    <button class="btn-primary" id="send-otp-btn">
+      Send OTP
+    </button>
+
+    <button class="btn-primary" id="signup-btn" style="display: none;">
+      Verify & Create Account
     </button>
 
     <p class="auth-switch">
