@@ -21,7 +21,8 @@ const statTotal      = document.getElementById('stat-total');
 const statAuto       = document.getElementById('stat-auto');
 const statSynced     = document.getElementById('stat-synced');
 const syncBtn        = document.getElementById('sync-btn');
-const openAppBtn     = document.getElementById('open-app-btn').addEventListener('click', () => {
+const openAppBtn     = document.getElementById('open-app-btn');
+openAppBtn.addEventListener('click', () => {
   chrome.tabs.create({ url: 'https://studyai-jptp.onrender.com' });
 });
 const clearBtn       = document.getElementById('clear-btn');

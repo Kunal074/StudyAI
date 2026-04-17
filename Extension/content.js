@@ -218,9 +218,9 @@
         if (response.success) {
           btn.innerHTML = '✓ Saved!';
           status.className = 'ok';
-          status.textContent = 'Open StudyAI to view your notes →';
-          // Auto-dismiss after 4 seconds
-          setTimeout(() => widget.remove(), 4000);
+          status.innerHTML = '<a href="https://studyai-jptp.onrender.com" target="_blank" style="color: inherit; text-decoration: underline; cursor: pointer;">Open StudyAI to view your notes →</a>';
+          // Auto-dismiss after 6 seconds so user has time to click
+          setTimeout(() => widget.remove(), 6000);
         } else {
           throw new Error(response.error || 'Failed');
         }
