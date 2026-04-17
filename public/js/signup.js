@@ -96,6 +96,7 @@ async function handleSignup() {
   const name     = nameInput.value.trim();
   const email    = emailInput.value.trim();
   const password = passInput.value.trim();
+  const confirm  = confirmInput.value.trim();
   const otp      = otpInput.value.trim();
 
   // ── Validate ──────────────────────────────────────────────────────────────
