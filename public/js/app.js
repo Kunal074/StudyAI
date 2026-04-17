@@ -15,11 +15,12 @@
  */
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TOKEN = localStorage.getItem('token');
-const USER  = JSON.parse(localStorage.getItem('user') || '{}');
+const TOKEN       = localStorage.getItem('token');
+const USER        = JSON.parse(localStorage.getItem('user') || '{}');
+const SHARE_TOKEN = new URLSearchParams(window.location.search).get('token');
 
-// ── Auth check — login nahi hai toh login page pe bhejo ──────────────────────
-if (!TOKEN) {
+// ── Auth check — skip if opening a shared note link ───────────────────────────
+if (!TOKEN && !SHARE_TOKEN) {
   window.location.href = 'login.html';
 }
 
@@ -87,12 +88,17 @@ init();
 // 2. PAGE NAVIGATION
 // ══════════════════════════════════════════════════════
 function showPage(page) {
-  homepage.classList.add('hidden');
-  resultsPage.classList.add('hidden');
-  libraryPage.classList.add('hidden');
+  // Hide all pages including Phase 2 additions
+  document.querySelectorAll('#homepage, #results-page, #library-page, #quiz-page, #collab-page')
+    .forEach(p => p?.classList.add('hidden'));
 
   page.classList.remove('hidden');
   window.scrollTo(0, 0);
+
+  // Disconnect socket when leaving the collab page
+  if (page.id !== 'collab-page' && typeof window.collab !== 'undefined') {
+    window.collab.disconnect();
+  }
 }
 
 // Back buttons
@@ -424,7 +430,13 @@ async function loadLibrary(searchQuery = '') {
           </div>
           <div class="lib-card-title">${esc(notes.title || entry.query)}</div>
           <div class="lib-card-def">${esc(notes.definition || '')}</div>
-          <div class="lib-card-date">${date}</div>
+          <div class="lib-card-footer">
+            <span class="lib-card-date">${date}</span>
+            <div class="lib-card-actions">
+              <button class="lib-action-btn quiz-btn" data-id="${entry.id}" data-query="${esc(entry.query)}" title="Take Quiz">🧠 Quiz</button>
+              <button class="lib-action-btn share-btn" data-id="${entry.id}" data-query="${esc(entry.query)}" title="Share Note">🔗 Share</button>
+            </div>
+          </div>
         </div>`;
     }).join('');
 
@@ -442,6 +454,22 @@ async function loadLibrary(searchQuery = '') {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         deleteNote(btn.dataset.id);
+      });
+    });
+
+    // Quiz buttons (Phase 2)
+    libraryGrid.querySelectorAll('.quiz-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openQuiz(btn.dataset.id, btn.dataset.query);
+      });
+    });
+
+    // Share buttons (Phase 2)
+    libraryGrid.querySelectorAll('.share-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        shareNote(btn.dataset.id, btn.dataset.query);
       });
     });
 
@@ -676,3 +704,547 @@ function esc(s = '') {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+// ══════════════════════════════════════════════════════════════════
+// PHASE 2 — QUIZ + COLLABORATION
+// ══════════════════════════════════════════════════════════════════
+
+// ── Quiz DOM refs ─────────────────────────────────────────────────
+const quizPage          = $('quiz-page');
+const quizIntroPanel    = $('quiz-intro');
+const quizActivePanel   = $('quiz-active');
+const quizResultsPanel  = $('quiz-results');
+const quizBackBtn       = $('quiz-back-btn');
+const quizExitBtn       = $('quiz-exit-btn');
+const quizResultsBkBtn  = $('quiz-results-back-btn');
+const startQuizBtn      = $('start-quiz-btn');
+const quizNextBtn       = $('quiz-next-btn');
+const retakeQuizBtn     = $('retake-quiz-btn');
+const resultsLibBtn     = $('results-library-btn');
+const quizTopicTitle    = $('quiz-topic-title');
+const qCurrent          = $('q-current');
+const qTotal            = $('q-total');
+const quizProgressBar   = $('quiz-progress-bar');
+const questionText      = $('question-text');
+const optionsGrid       = $('options-grid');
+const scoreRing         = $('score-ring');
+const scoreNumber       = $('score-number');
+const scoreMessage      = $('score-message');
+const scorePctText      = $('score-pct-text');
+const weakTopicsSection = $('weak-topics-section');
+const weakTopicsList    = $('weak-topics-list');
+const breakdownList     = $('breakdown-list');
+const quizGenLoading    = $('quiz-gen-loading');
+
+// ── Collab DOM refs ───────────────────────────────────────────────
+const collabPage        = $('collab-page');
+const collabBackBtn     = $('collab-back-btn');
+const collabNoteTopic   = $('collab-note-topic');
+const collabOwnerName   = $('collab-owner-name');
+const presenceBar       = $('presence-bar');
+const collabNoteContent = $('collab-note-content');
+const collabPermBadge   = $('collab-permission-badge');
+const commentsList      = $('comments-list');
+const commentInput      = $('comment-input');
+const postCommentBtn    = $('post-comment-btn');
+const commentsCountBadge= $('comments-count');
+
+// ── Share Modal DOM refs ──────────────────────────────────────────
+const shareModal        = $('share-modal');
+const shareModalClose   = $('share-modal-close');
+const shareModalTitle   = $('share-modal-title');
+const shareLinkInput    = $('share-link-input');
+const copyLinkBtn       = $('copy-link-btn');
+const collabListSection = $('collab-list-section');
+const collabMembers     = $('collab-members');
+const shareLinkRow      = $('share-link-row');
+const shareLinkLoading  = $('share-link-loading');
+
+// ── Quiz State ────────────────────────────────────────────────────
+let currentQuiz        = null;
+let quizAnswers        = [];
+let quizCurrentQ       = 0;
+let selectedOption     = null;
+let currentNoteIdForQ  = null;
+
+// ── Collab / Share State ──────────────────────────────────────────
+let currentCollabToken     = null;
+let currentSharePermission = 'view';
+let currentShareNoteId     = null;
+
+// ══════════════════════════════════════════════════════════════════
+// QUIZ — Open
+// ══════════════════════════════════════════════════════════════════
+async function openQuiz(noteId, noteQuery) {
+  currentNoteIdForQ = noteId;
+
+  quizTopicTitle.textContent = noteQuery;
+  quizIntroPanel.classList.remove('hidden');
+  quizActivePanel.classList.add('hidden');
+  quizResultsPanel.classList.add('hidden');
+  quizGenLoading.classList.add('hidden');
+  startQuizBtn.disabled = false;
+  startQuizBtn.textContent = 'Start Quiz →';
+
+  showPage(quizPage);
+}
+
+startQuizBtn.addEventListener('click', async () => {
+  startQuizBtn.disabled = true;
+  startQuizBtn.textContent = 'Generating…';
+  quizGenLoading.classList.remove('hidden');
+
+  try {
+    const res  = await fetch('/api/quiz/generate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body:    JSON.stringify({ note_id: currentNoteIdForQ })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error);
+
+    currentQuiz    = data.quiz;
+    quizAnswers    = new Array(getQuestions().length).fill(null);
+    quizCurrentQ   = 0;
+    selectedOption = null;
+
+    showQuizActive();
+
+  } catch (err) {
+    quizGenLoading.classList.add('hidden');
+    startQuizBtn.disabled = false;
+    startQuizBtn.textContent = 'Start Quiz →';
+    alert('Quiz generation failed: ' + (err.message || 'Try again.'));
+  }
+});
+
+function getQuestions() {
+  return currentQuiz?.questions?.questions || [];
+}
+
+function showQuizActive() {
+  quizIntroPanel.classList.add('hidden');
+  quizActivePanel.classList.remove('hidden');
+  quizResultsPanel.classList.add('hidden');
+  qTotal.textContent = getQuestions().length;
+  renderQuestion(0);
+}
+
+function renderQuestion(index) {
+  const questions = getQuestions();
+  quizCurrentQ    = index;
+  selectedOption  = quizAnswers[index];
+
+  qCurrent.textContent = index + 1;
+  quizProgressBar.style.width = `${((index + 1) / questions.length) * 100}%`;
+
+  const q       = questions[index];
+  const letters = ['A', 'B', 'C', 'D'];
+
+  questionText.textContent = q.question;
+
+  optionsGrid.innerHTML = q.options.map((opt, i) => `
+    <button class="option-btn ${selectedOption === i ? 'selected' : ''}" data-index="${i}">
+      <span class="option-letter">${letters[i]}</span>
+      <span>${esc(opt)}</span>
+    </button>
+  `).join('');
+
+  optionsGrid.querySelectorAll('.option-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectOption(parseInt(btn.dataset.index)));
+  });
+
+  quizNextBtn.disabled    = selectedOption === null;
+  quizNextBtn.textContent = index === questions.length - 1 ? 'Submit Quiz ✓' : 'Next →';
+}
+
+function selectOption(index) {
+  selectedOption            = index;
+  quizAnswers[quizCurrentQ] = index;
+
+  optionsGrid.querySelectorAll('.option-btn').forEach((btn, i) => {
+    btn.classList.toggle('selected', i === index);
+  });
+
+  quizNextBtn.disabled = false;
+}
+
+quizNextBtn.addEventListener('click', () => {
+  const questions = getQuestions();
+  if (quizCurrentQ < questions.length - 1) {
+    selectedOption = null;
+    renderQuestion(quizCurrentQ + 1);
+  } else {
+    submitQuiz();
+  }
+});
+
+async function submitQuiz() {
+  quizNextBtn.disabled    = true;
+  quizNextBtn.textContent = 'Submitting…';
+
+  try {
+    const res  = await fetch('/api/quiz/submit', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body:    JSON.stringify({ quiz_id: currentQuiz.id, answers: quizAnswers })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error);
+    renderQuizResults(data);
+  } catch (err) {
+    quizNextBtn.disabled    = false;
+    quizNextBtn.textContent = 'Submit Quiz ✓';
+    alert('Submission failed. Try again.');
+  }
+}
+
+function renderQuizResults(data) {
+  quizActivePanel.classList.add('hidden');
+  quizResultsPanel.classList.remove('hidden');
+
+  const { score, total, percentage, breakdown, weakTopics } = data;
+
+  // Animate score ring after short delay so transition is visible
+  setTimeout(() => scoreRing.style.setProperty('--score-pct', percentage), 150);
+
+  scoreNumber.textContent  = score;
+  scorePctText.textContent = `${percentage}% — ${score} of ${total} correct`;
+
+  const msgs = [
+    { min: 90, text: '🏆 Outstanding! You\'ve mastered this topic.' },
+    { min: 70, text: '🎉 Great job! Strong understanding.' },
+    { min: 50, text: '📖 Good effort! Review the weak topics below.' },
+    { min: 0,  text: '💪 Keep studying — you\'ll get there!' }
+  ];
+  scoreMessage.textContent = msgs.find(m => percentage >= m.min).text;
+
+  // Weak topics
+  if (weakTopics?.length > 0) {
+    weakTopicsSection.classList.remove('hidden');
+    weakTopicsList.innerHTML = weakTopics.map((t, i) => `
+      <button class="weak-topic-pill" data-i="${i}">🔍 ${esc(t)}</button>
+    `).join('');
+    weakTopicsList.querySelectorAll('.weak-topic-pill').forEach(pill => {
+      pill.addEventListener('click', () => go(weakTopics[parseInt(pill.dataset.i)]));
+    });
+  } else {
+    weakTopicsSection.classList.add('hidden');
+  }
+
+  // Question breakdown
+  breakdownList.innerHTML = breakdown.map(item => `
+    <div class="breakdown-item ${item.isCorrect ? 'correct' : 'wrong'}">
+      <div class="breakdown-q">
+        <span class="breakdown-icon">${item.isCorrect ? '✅' : '❌'}</span>
+        <span>${esc(item.question)}</span>
+      </div>
+      ${!item.isCorrect ? `
+        <div class="breakdown-detail">
+          <span class="breakdown-your">Your: ${esc(item.options[item.userAnswer] || '—')}</span>
+          <span class="breakdown-correct">Correct: ${esc(item.options[item.correct])}</span>
+        </div>
+        <div class="breakdown-explanation">${esc(item.explanation)}</div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+// Quiz navigation buttons
+quizBackBtn.addEventListener('click',      () => { showPage(libraryPage); loadLibrary(); });
+quizExitBtn.addEventListener('click',      () => { quizIntroPanel.classList.remove('hidden'); quizActivePanel.classList.add('hidden'); });
+quizResultsBkBtn.addEventListener('click', () => { showPage(libraryPage); loadLibrary(); });
+resultsLibBtn.addEventListener('click',    () => { showPage(libraryPage); loadLibrary(); });
+
+retakeQuizBtn.addEventListener('click', () => {
+  quizAnswers    = new Array(getQuestions().length).fill(null);
+  quizCurrentQ   = 0;
+  selectedOption = null;
+  scoreRing.style.setProperty('--score-pct', 0);
+  showQuizActive();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// SHARE / COLLAB
+// ══════════════════════════════════════════════════════════════════
+
+shareModalClose.addEventListener('click', () => shareModal.classList.add('hidden'));
+shareModal.addEventListener('click', e => { if (e.target === shareModal) shareModal.classList.add('hidden'); });
+
+document.querySelectorAll('.perm-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.perm-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSharePermission = btn.dataset.perm;
+    if (currentShareNoteId) {
+      shareLinkRow.classList.add('hidden');
+      shareLinkLoading.classList.remove('hidden');
+      shareLinkLoading.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px"></div><span>Generating link…</span>';
+      createShareLink(currentShareNoteId);
+    }
+  });
+});
+
+copyLinkBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(shareLinkInput.value).then(() => {
+    copyLinkBtn.textContent = '✓ Copied!';
+    copyLinkBtn.style.background = 'var(--success)';
+    setTimeout(() => {
+      copyLinkBtn.textContent = 'Copy';
+      copyLinkBtn.style.background = '';
+    }, 2000);
+  });
+});
+
+async function shareNote(noteId, noteQuery) {
+  currentShareNoteId     = noteId;
+  currentSharePermission = 'view';
+
+  shareModalTitle.textContent = noteQuery;
+  shareLinkInput.value        = '';
+  shareLinkRow.classList.add('hidden');
+  shareLinkLoading.classList.remove('hidden');
+  shareLinkLoading.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px"></div><span>Generating link…</span>';
+  collabListSection.classList.add('hidden');
+
+  document.querySelectorAll('.perm-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.perm === 'view');
+  });
+
+  shareModal.classList.remove('hidden');
+  await createShareLink(noteId);
+}
+
+async function createShareLink(noteId) {
+  try {
+    const res  = await fetch('/api/share/create', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body:    JSON.stringify({ note_id: noteId, permission: currentSharePermission })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error);
+
+    currentCollabToken   = data.token;
+    shareLinkInput.value = data.shareUrl;
+    shareLinkLoading.classList.add('hidden');
+    shareLinkRow.classList.remove('hidden');
+    loadCollaborators(data.token);
+
+  } catch (err) {
+    shareLinkLoading.innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`;
+  }
+}
+
+async function loadCollaborators(token) {
+  try {
+    const res  = await fetch(`/api/share/${token}/collaborators`, {
+      headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const data = await res.json();
+    if (!data.success || data.collaborators.length === 0) return;
+
+    collabListSection.classList.remove('hidden');
+    collabMembers.innerHTML = data.collaborators.map(c => `
+      <div class="collab-member-item">
+        <div class="collab-member-avatar">${esc(c.name.charAt(0).toUpperCase())}</div>
+        <span>${esc(c.name)}</span>
+      </div>
+    `).join('');
+  } catch {}
+}
+
+async function openCollabPage(token) {
+  currentCollabToken = token;
+  showPage(collabPage);
+
+  try {
+    const res  = await fetch(`/api/share/${token}`);
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      collabNoteContent.innerHTML = `
+        <div style="text-align:center;padding:80px 20px;color:var(--muted)">
+          <div style="font-size:40px;margin-bottom:16px">🔗</div>
+          <p>Share link not found or has been revoked.</p>
+        </div>`;
+      return;
+    }
+
+    const { share } = data;
+
+    collabNoteTopic.textContent = share.query;
+    collabOwnerName.textContent = `Shared by ${share.ownerName}`;
+
+    if (share.permission === 'edit') {
+      collabPermBadge.textContent = '✏ Can Edit';
+      collabPermBadge.style.color  = 'var(--success)';
+    }
+
+    collabNoteContent.innerHTML = buildNoteHTML(share.notes);
+
+    if (TOKEN) {
+      fetch(`/api/share/${token}/join`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${TOKEN}` }
+      }).catch(() => {});
+    }
+
+    if (window.collab) {
+      window.collab.connect(token, USER.name ? { name: USER.name } : { name: 'Guest' }, {
+        onUserJoined: (u) => addPresenceAvatar(u),
+        onUserLeft:   () => {},
+        onNewComment: (c) => appendComment(c)
+      });
+    }
+
+    loadComments(token);
+
+    if (!TOKEN) {
+      const inputArea = document.getElementById('comment-input-area');
+      if (inputArea) inputArea.innerHTML = `
+        <p style="text-align:center;padding:16px 12px;font-size:12px;color:var(--muted)">
+          <a href="/login.html" style="color:var(--accent)">Login</a> to add comments
+        </p>`;
+    }
+
+  } catch {
+    collabNoteContent.innerHTML = `
+      <div style="text-align:center;padding:80px;color:var(--muted)">Error loading shared note.</div>`;
+  }
+}
+
+function buildNoteHTML(notes) {
+  if (!notes) return '';
+  const {
+    title = '', definition = '', keyPoints = [],
+    example = '', formulaOrCode = '', formulaLabel = '', relatedTopics = []
+  } = notes;
+
+  let html = `
+    <div class="card-header">
+      <h2 class="card-title">${esc(title)}</h2>
+    </div>
+    <div class="card-body">
+      <div class="card-section">
+        <div class="section-label">Definition</div>
+        <p class="definition-text">${esc(definition)}</p>
+      </div>
+      <div class="card-section">
+        <div class="section-label">Key Points</div>
+        <ul class="key-points">
+          ${keyPoints.map(p => `<li>${esc(p)}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="card-section">
+        <div class="section-label">Example</div>
+        <div class="example-box">${esc(example)}</div>
+      </div>`;
+
+  if (formulaOrCode?.trim()) {
+    html += `
+      <div class="card-section">
+        <div class="section-label">Formula / Code</div>
+        ${formulaLabel ? `<div class="code-label">${esc(formulaLabel)}</div>` : ''}
+        <pre class="code-block">${esc(formulaOrCode)}</pre>
+      </div>`;
+  }
+
+  if (relatedTopics.length) {
+    html += `
+      <div class="card-section">
+        <div class="section-label">Related Topics</div>
+        <div class="related-chips">
+          ${relatedTopics.map(t => `<span class="related-chip">${esc(t)}</span>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function addPresenceAvatar(user) {
+  const div       = document.createElement('div');
+  div.className   = 'presence-avatar';
+  div.title       = user.name || 'Guest';
+  div.textContent = (user.name || 'G').charAt(0).toUpperCase();
+  presenceBar.appendChild(div);
+}
+
+async function loadComments(token) {
+  try {
+    const res  = await fetch(`/api/share/${token}/comments`);
+    const data = await res.json();
+    if (!data.success) return;
+
+    commentsList.innerHTML = '';
+    if (data.comments.length === 0) {
+      commentsList.innerHTML = '<div class="comments-empty">No comments yet. Be the first!</div>';
+    } else {
+      data.comments.forEach(c => appendComment(c));
+    }
+    updateCommentsCount(data.comments.length);
+  } catch {}
+}
+
+function appendComment(comment) {
+  const emptyEl = commentsList.querySelector('.comments-empty');
+  if (emptyEl) emptyEl.remove();
+
+  const date = new Date(comment.created_at).toLocaleTimeString('en-IN', {
+    hour: '2-digit', minute: '2-digit'
+  });
+
+  const div       = document.createElement('div');
+  div.className   = 'comment-item';
+  div.innerHTML   = `
+    <div class="comment-author">
+      ${esc(comment.user_name || 'Guest')}
+      <span class="comment-time">${date}</span>
+    </div>
+    <div class="comment-content">${esc(comment.content)}</div>`;
+
+  commentsList.appendChild(div);
+  commentsList.scrollTop = commentsList.scrollHeight;
+  updateCommentsCount(parseInt(commentsCountBadge.textContent || '0') + 1);
+}
+
+function updateCommentsCount(n) { commentsCountBadge.textContent = n; }
+
+postCommentBtn?.addEventListener('click', async () => {
+  const content = commentInput?.value.trim();
+  if (!content || !currentCollabToken) return;
+
+  postCommentBtn.disabled    = true;
+  postCommentBtn.textContent = '…';
+
+  try {
+    const res  = await fetch(`/api/share/${currentCollabToken}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body:   JSON.stringify({ content })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error);
+    commentInput.value = '';
+    appendComment(data.comment);
+  } catch { alert('Comment failed. Are you logged in?'); }
+  finally {
+    postCommentBtn.disabled    = false;
+    postCommentBtn.textContent = 'Post';
+  }
+});
+
+commentInput?.addEventListener('input', () => {
+  commentInput.style.height = 'auto';
+  commentInput.style.height = Math.min(commentInput.scrollHeight, 120) + 'px';
+});
+
+collabBackBtn?.addEventListener('click', () => {
+  window.collab?.disconnect();
+  if (TOKEN) { showPage(libraryPage); loadLibrary(); }
+  else        { showPage(homepage); }
+});
+
+// ── Load shared note if token in URL ─────────────────────────────
+if (SHARE_TOKEN) openCollabPage(SHARE_TOKEN);

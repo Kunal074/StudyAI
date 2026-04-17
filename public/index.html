@@ -191,6 +191,165 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════
+     PAGE 4 — QUIZ PAGE
+══════════════════════════════════════ -->
+<div id="quiz-page" class="quiz-page hidden">
+
+  <!-- ── Intro screen ──────────────────────────────────────── -->
+  <div id="quiz-intro" class="quiz-intro">
+    <button id="quiz-back-btn" class="back-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="quiz-intro-card">
+      <div class="quiz-intro-icon">🧠</div>
+      <h2 id="quiz-topic-title" class="quiz-topic-title">Topic</h2>
+      <div class="quiz-meta-row">
+        <span class="quiz-meta-pill">📝 10 Questions</span>
+        <span class="quiz-meta-pill">🎯 MCQ Format</span>
+        <span class="quiz-meta-pill">⏱ ~5 Minutes</span>
+      </div>
+      <p class="quiz-intro-sub">AI-generated from your saved notes. Score 70%+ to master the topic!</p>
+      <div id="quiz-gen-loading" class="quiz-gen-loading hidden">
+        <div class="spinner" style="width:24px;height:24px;border-width:2px"></div>
+        <span>Generating your quiz…</span>
+      </div>
+      <button id="start-quiz-btn" class="start-quiz-btn">Start Quiz →</button>
+    </div>
+  </div>
+
+  <!-- ── Active quiz screen ────────────────────────────────── -->
+  <div id="quiz-active" class="quiz-active hidden">
+    <div class="quiz-q-header">
+      <button id="quiz-exit-btn" class="back-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="quiz-counter">Q&thinsp;<span id="q-current">1</span>&thinsp;/&thinsp;<span id="q-total">10</span></div>
+    </div>
+    <div class="quiz-progress-track">
+      <div id="quiz-progress-bar" class="quiz-progress-fill"></div>
+    </div>
+    <div id="question-card" class="question-card">
+      <div id="question-text" class="question-text"></div>
+      <div id="options-grid" class="options-grid"></div>
+    </div>
+    <div class="quiz-nav-row">
+      <button id="quiz-next-btn" class="quiz-next-btn" disabled>Next →</button>
+    </div>
+  </div>
+
+  <!-- ── Results screen ────────────────────────────────────── -->
+  <div id="quiz-results" class="quiz-results hidden">
+    <button id="quiz-results-back-btn" class="back-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="score-card">
+      <div id="score-ring" class="score-ring">
+        <div class="score-ring-inner">
+          <div id="score-number" class="score-number">0</div>
+          <div class="score-outof">/ 10</div>
+        </div>
+      </div>
+      <div id="score-message" class="score-message"></div>
+      <div id="score-pct-text" class="score-pct-text"></div>
+    </div>
+    <div id="weak-topics-section" class="weak-topics-section hidden">
+      <div class="section-label">⚡ Topics to Revisit</div>
+      <div id="weak-topics-list" class="weak-topics-list"></div>
+    </div>
+    <div class="breakdown-section">
+      <div class="section-label">📋 Question Breakdown</div>
+      <div id="breakdown-list" class="breakdown-list"></div>
+    </div>
+    <div class="quiz-results-actions">
+      <button id="retake-quiz-btn" class="retake-btn">🔁 Retake Quiz</button>
+      <button id="results-library-btn" class="nav-btn">Back to Library</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 5 — COLLABORATIVE NOTE
+══════════════════════════════════════ -->
+<div id="collab-page" class="collab-page hidden">
+  <div class="collab-layout">
+
+    <!-- Main note area -->
+    <div class="collab-main">
+      <div class="collab-header">
+        <button id="collab-back-btn" class="back-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div>
+          <div id="collab-note-topic" class="collab-topic-name"></div>
+          <div id="collab-owner-name" class="collab-owner-label"></div>
+        </div>
+        <div id="presence-bar" class="presence-bar"></div>
+      </div>
+      <div class="collab-badge-row">
+        <span class="card-badge">Shared Note</span>
+        <span id="collab-permission-badge" class="permission-badge">👁 View Only</span>
+      </div>
+      <div id="collab-note-content" class="collab-note-content">
+        <div class="loading-state"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Comments sidebar -->
+    <div class="collab-sidebar">
+      <div class="comments-header">
+        <span>💬 Comments</span>
+        <span id="comments-count" class="comments-count-badge">0</span>
+      </div>
+      <div id="comments-list" class="comments-list">
+        <div class="comments-empty">No comments yet. Be the first!</div>
+      </div>
+      <div id="comment-input-area" class="comment-input-area">
+        <textarea id="comment-input" class="comment-textarea" placeholder="Add a comment…" rows="2"></textarea>
+        <button id="post-comment-btn" class="post-comment-btn">Post</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SHARE MODAL
+══════════════════════════════════════ -->
+<div id="share-modal" class="modal-overlay hidden">
+  <div class="modal-box share-modal-box">
+    <button id="share-modal-close" class="modal-close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="share-modal-header">
+      <div class="card-badge">Share Note</div>
+      <h3 id="share-modal-title" class="share-modal-title"></h3>
+    </div>
+    <div class="share-perm-row">
+      <span class="share-perm-label">Permission:</span>
+      <div class="share-perm-toggle">
+        <button class="perm-btn active" data-perm="view">👁 View only</button>
+        <button class="perm-btn" data-perm="edit">✏️ Can edit</button>
+      </div>
+    </div>
+    <div id="share-link-loading" class="share-link-loading">
+      <div class="spinner" style="width:16px;height:16px;border-width:2px"></div>
+      <span>Generating link…</span>
+    </div>
+    <div id="share-link-row" class="share-link-row hidden">
+      <input id="share-link-input" class="share-link-input" type="text" readonly/>
+      <button id="copy-link-btn" class="copy-link-btn">Copy</button>
+    </div>
+    <div id="collab-list-section" class="collab-list-section hidden">
+      <div class="section-label" style="margin-top:18px">👥 Collaborators</div>
+      <div id="collab-members" class="collab-members"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/collab.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
