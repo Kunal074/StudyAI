@@ -13,7 +13,7 @@
  */
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const API_BASE    = 'http://localhost:3000/api';
+const API_BASE    = 'https://studyai-jptp.onrender.com/api';
 const STORAGE_KEY = 'studyai_notes';
 
 // ── Message Router ────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ async function generateAndSave(query) {
     }
 
     // ── Step 2: Notes generate karo ───────────────────────────────────────
-    const genResponse = await fetch('http://localhost:3000/api/notes', {
+    const genResponse = await fetch('https://studyai-jptp.onrender.com/api/notes', {
       method:  'POST',
       headers: { 
         'Content-Type':  'application/json',
@@ -81,7 +81,7 @@ async function generateAndSave(query) {
     if (!genData.success) throw new Error(genData.error);
 
     // ── Step 3: Note save karo server pe ─────────────────────────────────
-    const saveResponse = await fetch('http://localhost:3000/api/notes/save', {
+    const saveResponse = await fetch('https://studyai-jptp.onrender.com/api/notes/save', {
       method:  'POST',
       headers: { 
         'Content-Type':  'application/json',

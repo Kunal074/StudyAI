@@ -13,8 +13,8 @@
   "host_permissions": [
     "https://www.google.com/*",
     "https://www.bing.com/*",
-    "http://localhost:3000/*",
-    "https://localhost:3000/*"
+    "https://studyai-jptp.onrender.com/*",
+    "https://studyai-jptp.onrender.com/*"
   ],  
 
   "background": {

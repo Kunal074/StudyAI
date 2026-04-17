@@ -22,7 +22,7 @@ const statAuto       = document.getElementById('stat-auto');
 const statSynced     = document.getElementById('stat-synced');
 const syncBtn        = document.getElementById('sync-btn');
 const openAppBtn     = document.getElementById('open-app-btn').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'http://localhost:3000' });
+  chrome.tabs.create({ url: 'https://studyai-jptp.onrender.com' });
 });
 const clearBtn       = document.getElementById('clear-btn');
 const pullSyncBtn    = document.getElementById('pull-sync-btn');
@@ -76,7 +76,7 @@ document.getElementById('ext-login-btn').addEventListener('click', async () => {
   btn.textContent = 'Logging in…';
 
   try {
-    const res  = await fetch('http://localhost:3000/api/auth/login', {
+    const res  = await fetch('https://studyai-jptp.onrender.com/api/auth/login', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ email, password })
@@ -220,7 +220,7 @@ clearBtn.addEventListener('click', async () => {
 
 // ── 8. Open main app in new tab ───────────────────────────────────────────────
 openAppBtn.addEventListener('click', () => {
-  chrome.tabs.create({ url: 'http://localhost:3000' });
+  chrome.tabs.create({ url: 'https://studyai-jptp.onrender.com' });
 });
 
 // ── 9. File upload — Google Takeout JSON ──────────────────────────────────────
