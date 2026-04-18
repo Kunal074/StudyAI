@@ -76,9 +76,8 @@ async function generateAndSave(query) {
       body: JSON.stringify({ query })
     });
 
-    if (!genResponse.ok) throw new Error('Generation failed');
     const genData = await genResponse.json();
-    if (!genData.success) throw new Error(genData.error);
+    if (!genResponse.ok || !genData.success) throw new Error(genData.error || 'Generation failed');
 
     // ── Step 3: Note save karo server pe ─────────────────────────────────
     const saveResponse = await fetch('https://studyai-jptp.onrender.com/api/notes/save', {
@@ -94,9 +93,8 @@ async function generateAndSave(query) {
       })
     });
 
-    if (!saveResponse.ok) throw new Error('Save failed');
     const saveData = await saveResponse.json();
-    if (!saveData.success) throw new Error(saveData.error);
+    if (!saveResponse.ok || !saveData.success) throw new Error(saveData.error || 'Save failed');
 
     // ── Step 4: Chrome storage mein bhi save karo (popup ke liye) ────────
     const existing = await getNotes();

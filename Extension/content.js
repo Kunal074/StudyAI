@@ -235,7 +235,7 @@
           </svg>
           Retry`;
         status.className = 'err';
-        status.textContent = 'Make sure StudyAI app is running on port 3000';
+        status.textContent = err.message || 'Make sure StudyAI is connected and logged in.';
       }
     });
   }
