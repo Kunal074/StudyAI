@@ -4,6 +4,7 @@
   "version": "1.0",
   "description": "Detects your Google searches and saves AI study notes with one click.",
 
+
   "permissions": [
     "storage",
     "activeTab",
@@ -16,6 +17,8 @@
     "https://studyai-jptp.onrender.com/*",
     "https://studyai-jptp.onrender.com/*"
   ],  
+
+  
 
   "background": {
     "service_worker": "background.js"
@@ -32,8 +35,19 @@
   }
 ],
 
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+
   "action": {
     "default_popup": "popup.html",
-    "default_title": "StudyAI Notes"
+    "default_title": "StudyAI Notes",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   }
 }
